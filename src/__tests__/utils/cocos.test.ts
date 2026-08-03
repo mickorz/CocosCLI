@@ -7,6 +7,7 @@ import {
   validateCreatorPath,
   getCocosCreatorPath,
   pickEditorFiles,
+  buildOpenArgs,
 } from '../../utils/cocos.js';
 
 /** 当前平台的 CocosCreator 可执行文件名 */
@@ -192,5 +193,19 @@ describe('pickEditorFiles', () => {
 
   it('无 editor 字段返回空数组', () => {
     expect(pickEditorFiles({})).toEqual([]);
+  });
+});
+
+describe('buildOpenArgs', () => {
+  it('默认只含 --project', () => {
+    expect(buildOpenArgs('D:\\A')).toEqual(['--project', 'D:\\A']);
+  });
+
+  it('noLogin 为 true 追加 --nologin', () => {
+    expect(buildOpenArgs('D:\\A', true)).toEqual(['--project', 'D:\\A', '--nologin']);
+  });
+
+  it('noLogin 为 false 不追加 --nologin', () => {
+    expect(buildOpenArgs('D:\\A', false)).toEqual(['--project', 'D:\\A']);
   });
 });

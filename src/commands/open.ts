@@ -8,7 +8,7 @@ import { isCocosProject } from '../utils/project.js';
  *
  * @param projectDir 工程目录，省略时默认当前执行目录
  */
-export function open(projectDir?: string): void {
+export function open(projectDir?: string, noLogin = false): void {
   const dir = path.resolve(projectDir ?? process.cwd());
 
   if (!isCocosProject(dir)) {
@@ -25,6 +25,6 @@ export function open(projectDir?: string): void {
     process.exit(1);
   }
 
-  openCocosProject(creatorPath, dir);
-  console.log(chalk.green(`已用 CocosCreator 打开工程：${dir}`));
+  openCocosProject(creatorPath, dir, noLogin);
+  console.log(chalk.green(`已用 CocosCreator 打开工程：${dir}${noLogin ? '（免登录）' : ''}`));
 }

@@ -6,8 +6,8 @@
 
 | 命令 | 说明 |
 |---|---|
-| `cocoscli init` | 为当前 Cocos 工程安装 CocosMCP 扩展并打开 |
-| `cocoscli open [dir]` | 用 CocosCreator 打开工程，dir 省略时为当前目录 |
+| `cocoscli init [--nologin]` | 为当前 Cocos 工程安装 CocosMCP 扩展并打开 |
+| `cocoscli open [dir] [--nologin]` | 用 CocosCreator 打开工程，dir 省略时为当前目录 |
 | `cocoscli close [dir]` | 关闭工程对应的 CocosCreator 进程，dir 省略时为当前目录 |
 
 ## 环境要求
@@ -32,15 +32,16 @@ npm link
 ### 打开工程
 
 ```bash
-cocoscli open                # 打开当前目录工程
-cocoscli open D:\MyGame      # 打开指定工程
+cocoscli open                      # 打开当前目录工程
+cocoscli open D:\MyGame            # 打开指定工程
+cocoscli open D:\MyGame --nologin  # 打开时不提示登录
 ```
 
 ### 关闭工程
 
 ```bash
-cocoscli close               # 关闭当前目录对应的进程
-cocoscli close D:\MyGame     # 关闭指定工程对应的进程
+cocoscli close                     # 关闭当前目录对应的进程
+cocoscli close D:\MyGame           # 关闭指定工程对应的进程
 ```
 
 close 通过匹配 CocosCreator 进程命令行的 `--project` 参数定位目标工程，精确比对路径，不会误关同名前缀工程。
@@ -49,7 +50,8 @@ close 通过匹配 CocosCreator 进程命令行的 `--project` 参数定位目�
 
 ```bash
 cd D:\MyGame
-cocoscli init
+cocoscli init                      # 初始化扩展并打开
+cocoscli init --nologin            # 初始化并免登录打开
 ```
 
 init 会依次执行：
@@ -58,6 +60,8 @@ init 会依次执行：
 2. 判定当前目录是否 Cocos 3.x 工程
 3. 克隆 CocosMCP 扩展到 `extensions/CocosMCP`
 4. 用 CocosCreator 打开工程
+
+`--nologin` 会在打开编辑器时追加 `--nologin` 参数，跳过登录提示。
 
 ## CocosCreator 定位优先级
 

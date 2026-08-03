@@ -13,7 +13,7 @@ import { cloneCocosMcp, COCOS_MCP_URL } from '../utils/git.js';
  *   3. 克隆 CocosMCP 到 extensions/CocosMCP
  *   4. 打开工程（复用 open 的核心函数）
  */
-export function init(): void {
+export function init(noLogin = false): void {
   const cwd = process.cwd();
 
   // 第一步：定位 CocosCreator
@@ -45,7 +45,7 @@ export function init(): void {
   }
 
   // 第四步：打开工程
-  openCocosProject(creatorPath, cwd);
-  console.log(chalk.green(`已用 CocosCreator 打开工程：${cwd}`));
+  openCocosProject(creatorPath, cwd, noLogin);
+  console.log(chalk.green(`已用 CocosCreator 打开工程：${cwd}${noLogin ? '（免登录）' : ''}`));
   console.log(chalk.gray('提示：extensions/CocosMCP 未纳入父仓库管理，如需忽略请在 .gitignore 添加'));
 }
