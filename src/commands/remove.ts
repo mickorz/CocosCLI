@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import ora from 'ora';
+import { createSpinner, spinnerSucceed, spinnerFail } from '../utils/spinner.js';
 import { findCocosProcesses, isProjectMatch, killProcess } from '../utils/process.js';
 import { isCocosProject } from '../utils/project.js';
 import { COCOS_MCP_DIR, MCP_SERVER_FILE, TOOL_MANAGER_FILE } from '../utils/git.js';
@@ -75,12 +75,12 @@ function removeDir(dirPath: string, label: string): void {
     console.log(chalk.gray(`  ${label} 不存在，跳过`));
     return;
   }
-  const spinner = ora('  删除中（含 node_modules，可能稍慢）...').start();
+  const spinner = createSpinner('  删除中（含 node_modules，可能稍慢）...').start();
   try {
     fs.rmSync(dirPath, { recursive: true, force: true });
-    spinner.succeed(`  已删除 ${label}`);
+    spinnerSucceed(spinner, `  已删除 ${label}`);
   } catch (e) {
-    spinner.fail(`  删除 ${label} 失败`);
+    spinnerFail(spinner, `  删除 ${label} 失败`);
     console.log(chalk.red(`  ${e instanceof Error ? e.message : e}`));
     process.exit(1);
   }

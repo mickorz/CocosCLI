@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import ora from 'ora';
+import { createSpinner, spinnerSucceed, spinnerFail } from '../utils/spinner.js';
 import { getCocosCreatorPath, openCocosProject } from '../utils/cocos.js';
 import { isCocosProject } from '../utils/project.js';
 import { cloneCocosMcp, buildCocosMcp, writeDefaultMcpServerConfig, COCOS_MCP_URL } from '../utils/git.js';
@@ -35,12 +35,12 @@ export function init(noLogin = true): void {
   }
 
   // 第三步：克隆 CocosMCP 到 extensions（普通 git clone）
-  const spinner = ora('克隆 CocosMCP 扩展...').start();
+  const spinner = createSpinner('克隆 CocosMCP 扩展...').start();
   try {
     const result = cloneCocosMcp(cwd);
-    spinner.succeed(result.status === 'exists' ? 'CocosMCP 已存在，跳过克隆' : 'CocosMCP 克隆完成');
+    spinnerSucceed(spinner, result.status === 'exists' ? 'CocosMCP 已存在，跳过克隆' : 'CocosMCP 克隆完成');
   } catch (e) {
-    spinner.fail('克隆 CocosMCP 失败');
+    spinnerFail(spinner, '克隆 CocosMCP 失败');
     console.log(chalk.red(e instanceof Error ? e.message : String(e)));
     console.log(chalk.gray(`请确认本地 Gitea 服务在运行：${COCOS_MCP_URL}`));
     process.exit(1);
@@ -58,12 +58,12 @@ export function init(noLogin = true): void {
   }
 
   // 第五步：写入默认 mcp-server.json（CocosMCP 服务器配置，已存在则跳过）
-  const configSpinner = ora('配置默认 mcp-server.json...').start();
+  const configSpinner = createSpinner('配置默认 mcp-server.json...').start();
   try {
     const cfg = writeDefaultMcpServerConfig(cwd);
-    configSpinner.succeed(cfg === 'exists' ? 'mcp-server.json 已存在，跳过' : '默认 mcp-server.json 已写入 settings/');
+    spinnerSucceed(configSpinner, cfg === 'exists' ? 'mcp-server.json 已存在，跳过' : '默认 mcp-server.json 已写入 settings/');
   } catch (e) {
-    configSpinner.fail('写入 mcp-server.json 失败');
+    spinnerFail(configSpinner, '写入 mcp-server.json 失败');
     console.log(chalk.red(e instanceof Error ? e.message : String(e)));
     process.exit(1);
   }
