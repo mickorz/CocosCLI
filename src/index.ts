@@ -16,6 +16,7 @@ import { VERSION } from './version.js';
 import { init } from './commands/init.js';
 import { open } from './commands/open.js';
 import { close } from './commands/close.js';
+import { remove } from './commands/remove.js';
 
 const program = new Command();
 
@@ -41,6 +42,12 @@ program
   .command('close [dir]')
   .description('关闭工程对应的 CocosCreator 进程，dir 省略时为当前目录')
   .action((dir?: string) => close(dir));
+
+// remove：卸载 CocosMCP（关闭工程 + 删除扩展与配置，init 的逆操作）
+program
+  .command('remove [dir]')
+  .description('卸载 CocosMCP（关闭工程、删除 extensions/CocosMCP 与 settings 配置，init 的逆操作）')
+  .action((dir?: string) => remove(dir));
 
 // 无参数时显示帮助
 if (process.argv.length === 2) {

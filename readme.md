@@ -9,6 +9,7 @@
 | `cocoscli init` | 为当前 Cocos 工程安装 CocosMCP 扩展并打开（默认免登录） |
 | `cocoscli open [dir]` | 用 CocosCreator 打开工程，dir 省略时为当前目录（默认免登录） |
 | `cocoscli close [dir]` | 关闭工程对应的 CocosCreator 进程，dir 省略时为当前目录 |
+| `cocoscli remove [dir]` | 卸载 CocosMCP（关闭工程、删除扩展与 settings 配置），dir 省略时为当前目录 |
 
 ## 环境要求
 
@@ -46,6 +47,15 @@ cocoscli close D:\MyGame     # 关闭指定工程对应的进程
 ```
 
 close 通过匹配 CocosCreator 进程命令行的 `--project` 参数定位目标工程，精确比对路径，不会误关同名前缀工程。
+
+### 卸载扩展
+
+```bash
+cocoscli remove               # 卸载当前目录的 CocosMCP
+cocoscli remove D:\MyGame     # 卸载指定工程
+```
+
+remove 是 init 的逆操作：先关闭工程（如果在运行），再删除 `extensions/CocosMCP` 和 `settings/mcp-server.json`、`settings/tool-manager.json`。删除不可逆，但可用 `cocoscli init` 重新安装。
 
 ### 初始化扩展
 

@@ -16,7 +16,7 @@ import { execSync } from 'child_process';
 export const COCOS_MCP_URL = 'http://127.0.0.1:3000/mickorz/CocosMCP.git';
 
 /** extensions 子目录下 CocosMCP 的目标目录名 */
-const COCOS_MCP_DIR = 'CocosMCP';
+export const COCOS_MCP_DIR = 'CocosMCP';
 
 /** 安装结果 */
 export interface CloneResult {
@@ -71,8 +71,11 @@ const DEFAULT_MCP_SERVER_CONFIG = {
   maxConnections: 10,
 };
 
-/** CocosMCP 在 settings/ 下读取的配置文件名 */
-const MCP_SERVER_FILE = 'mcp-server.json';
+/** CocosMCP 在 settings/ 下读取的配置文件名（init 写默认，remove 删除） */
+export const MCP_SERVER_FILE = 'mcp-server.json';
+
+/** CocosMCP 工具管理器配置文件名（扩展自动生成，remove 清理） */
+export const TOOL_MANAGER_FILE = 'tool-manager.json';
 
 /**
  * 写入默认 mcp-server.json 到 <project>/settings/
