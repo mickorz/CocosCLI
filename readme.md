@@ -59,7 +59,8 @@ init 会依次执行：
 1. 定位本机 CocosCreator（5 级查找）
 2. 判定当前目录是否 Cocos 3.x 工程
 3. 安装 CocosMCP 扩展到 `extensions/CocosMCP`（父工程是 git 仓库时用 `git submodule add` 生成 `.gitmodules`，否则普通 `git clone`）
-4. 用 CocosCreator 打开工程（自动追加 `--nologin`）
+4. 构建 CocosMCP（`npm install` + `npm run build`，生成 `dist`，否则 CocosCreator 加载会报错）
+5. 用 CocosCreator 打开工程（自动追加 `--nologin`）
 
 ## CocosCreator 定位优先级
 

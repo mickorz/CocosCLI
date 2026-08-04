@@ -99,3 +99,20 @@ export function cloneCocosMcp(projectPath: string): CloneResult {
   });
   return { status: 'cloned', method: 'clone' };
 }
+
+/**
+ * 构建 CocosMCP 扩展（npm install + npm run build）
+ *
+ * CocosMCP 是 TypeScript 源码扩展，clone 下来没有 dist，
+ * 必须 build 才会生成 dist/main.js、dist/scene.js 等，否则 CocosCreator 加载报错。
+ *
+ * @throws 目录不存在或 npm install/build 失败时抛错
+ */
+export function buildCocosMcp(projectPath: string): void {
+  const extDir = path.join(projectPath, 'extensions', COCOS_MCP_DIR);
+  if (!fs.existsSync(extDir)) {
+    throw new Error(`CocosMCP 目录不存在：${extDir}`);
+  }
+  execSync('npm install --no-fund --no-audit', { cwd: extDir, stdio: 'inherit' });
+  execSync('npm run build', { cwd: extDir, stdio: 'inherit' });
+}
