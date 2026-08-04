@@ -17,6 +17,7 @@ import { init } from './commands/init.js';
 import { open } from './commands/open.js';
 import { close } from './commands/close.js';
 import { remove } from './commands/remove.js';
+import { build } from './commands/build.js';
 
 const program = new Command();
 
@@ -48,6 +49,12 @@ program
   .command('remove [dir]')
   .description('卸载 CocosMCP（关闭工程、删除 extensions/CocosMCP 与 settings 配置，init 的逆操作）')
   .action((dir?: string) => remove(dir));
+
+// build：构建工程到指定平台
+program
+  .command('build <platform> [dir]')
+  .description('构建工程到指定平台（web/web-desktop、web-mobile、wechat、douyin 等），dir 省略时为当前目录')
+  .action((platform: string, dir?: string) => build(dir, platform));
 
 // 无参数时显示帮助
 if (process.argv.length === 2) {

@@ -10,6 +10,7 @@
 | `cocoscli open [dir]` | 用 CocosCreator 打开工程，dir 省略时为当前目录（默认免登录） |
 | `cocoscli close [dir]` | 关闭工程对应的 CocosCreator 进程，dir 省略时为当前目录 |
 | `cocoscli remove [dir]` | 卸载 CocosMCP（关闭工程、删除扩展与 settings 配置），dir 省略时为当前目录 |
+| `cocoscli build <platform> [dir]` | 构建工程到指定平台（web-desktop/wechat/douyin 等），dir 省略时为当前目录 |
 
 ## 环境要求
 
@@ -56,6 +57,17 @@ cocoscli remove D:\MyGame     # 卸载指定工程
 ```
 
 remove 是 init 的逆操作：先关闭工程（如果在运行），再删除 `extensions/CocosMCP` 和 `settings/mcp-server.json`、`settings/tool-manager.json`。删除不可逆，但可用 `cocoscli init` 重新安装。
+
+### 构建打包
+
+```bash
+cocoscli build web-desktop            # 构建当前工程到 web-desktop
+cocoscli build web-desktop D:\MyGame  # 构建指定工程
+cocoscli build wechat                 # 微信小游戏（映射到 wechatgame）
+cocoscli build douyin                 # 抖音小游戏（映射到 bytedancegame）
+```
+
+build 内置打包逻辑：定位 CocosCreator → 生成通用 buildConfig（`.cocoscli/buildConfig-<platform>.json`）→ 调 `CocosCreator --project <工程> --build configPath=...`，产物在 `build/<platform>/`。支持的平台简称：`web`/`web-desktop`、`web-mobile`、`wechat`/`wechatgame`、`douyin`/`bytedance`/`bytedancegame`，其它名字原样传给 CocosCreator。
 
 ### 初始化扩展
 
