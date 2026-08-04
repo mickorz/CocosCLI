@@ -92,8 +92,9 @@ export function buildProject(projectPath: string, platform: string): BuildResult
   );
 
   // 调 CocosCreator 构建（同步等待，输出直传终端）
+  // cwd 必须设为工程根：configPath 是相对工程根的路径，CocosCreator 按进程 cwd 解析
   const args = ['--project', projectPath, '--build', `configPath=${configRelPath}`];
-  const result = spawnSync(creatorPath, args, { stdio: 'inherit' });
+  const result = spawnSync(creatorPath, args, { stdio: 'inherit', cwd: projectPath });
 
   // 验证产物（CocosCreator 常返回警告级非零码但实际成功，以产物目录为准）
   const outputDir = path.join(projectPath, 'build', cocosPlatform);
@@ -103,6 +104,11 @@ export function buildProject(projectPath: string, platform: string): BuildResult
 
   return {
     success: false,
-    message: `构建失败（CocosCreator 退出码 ${result.status}），产物目录不存在或为空：${outputDir}`,
+    message:
+      `构建失败（CocosCreator 退出码 ${result.status}）。` +
+      `若上方日志提示 startScene / No scenes 相关错误，说明工程没有可用启动场景：` +
+      `请在 CocosCreator 创建场景并设为启动场景，` +
+      `或在 ${configRelPath} 的 startScene 字段手动填入场景 uuid 后重试。` +
+      `产物目录：${outputDir}`,
   };
 }
