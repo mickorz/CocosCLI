@@ -32,13 +32,18 @@ export function init(noLogin = true): void {
     process.exit(1);
   }
 
-  // 第三步：克隆 CocosMCP 到 extensions
-  const spinner = ora('克隆 CocosMCP 扩展...').start();
+  // 第三步：安装 CocosMCP 到 extensions（git 工程用 submodule，非 git 工程用普通 clone）
+  const spinner = ora('安装 CocosMCP 扩展...').start();
   try {
     const result = cloneCocosMcp(cwd);
-    spinner.succeed(result === 'exists' ? 'CocosMCP 已存在，跳过克隆' : 'CocosMCP 克隆完成');
+    const methodLabel = result.method === 'submodule' ? 'submodule' : '普通 clone';
+    spinner.succeed(
+      result.status === 'exists'
+        ? `CocosMCP 已存在（${methodLabel}），跳过`
+        : `CocosMCP ${result.method === 'submodule' ? 'submodule 添加' : '克隆'}完成`
+    );
   } catch (e) {
-    spinner.fail('克隆 CocosMCP 失败');
+    spinner.fail('安装 CocosMCP 失败');
     console.log(chalk.red(e instanceof Error ? e.message : String(e)));
     console.log(chalk.gray(`请确认本地 Gitea 服务在运行：${COCOS_MCP_URL}`));
     process.exit(1);
