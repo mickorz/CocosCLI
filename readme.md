@@ -60,7 +60,10 @@ init 会依次执行：
 2. 判定当前目录是否 Cocos 3.x 工程
 3. 克隆 CocosMCP 扩展到 `extensions/CocosMCP`（普通 `git clone`）
 4. 构建 CocosMCP（`npm install` + `npm run build`，生成 `dist`，否则 CocosCreator 加载会报错）
-5. 用 CocosCreator 打开工程（自动追加 `--nologin`）
+5. 写入默认 `mcp-server.json` 到 `settings/`（端口 3001、autoStart 等，已存在则跳过）
+6. 用 CocosCreator 打开工程（自动追加 `--nologin`）
+
+> `tool-manager.json`（工具开关配置）由 CocosMCP 扩展首次打开时自动生成，cocoscli 不预置。
 
 ## CocosCreator 定位优先级
 

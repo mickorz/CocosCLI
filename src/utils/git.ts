@@ -62,3 +62,31 @@ export function buildCocosMcp(projectPath: string): void {
   execSync('npm install --no-fund --no-audit', { cwd: extDir, stdio: 'inherit' });
   execSync('npm run build', { cwd: extDir, stdio: 'inherit' });
 }
+
+/** 默认 mcp-server.json 配置（CocosMCP 扩展服务器设置） */
+const DEFAULT_MCP_SERVER_CONFIG = {
+  port: 3001,
+  autoStart: true,
+  debugLog: false,
+  maxConnections: 10,
+};
+
+/** CocosMCP 在 settings/ 下读取的配置文件名 */
+const MCP_SERVER_FILE = 'mcp-server.json';
+
+/**
+ * 写入默认 mcp-server.json 到 <project>/settings/
+ * 已存在则跳过（不覆盖用户已改的配置）
+ *
+ * @returns written 已写入 / exists 已存在跳过
+ */
+export function writeDefaultMcpServerConfig(projectPath: string): 'written' | 'exists' {
+  const settingsDir = path.join(projectPath, 'settings');
+  const filePath = path.join(settingsDir, MCP_SERVER_FILE);
+  fs.mkdirSync(settingsDir, { recursive: true });
+  if (fs.existsSync(filePath)) {
+    return 'exists';
+  }
+  fs.writeFileSync(filePath, JSON.stringify(DEFAULT_MCP_SERVER_CONFIG, null, 2) + '\n', 'utf-8');
+  return 'written';
+}
