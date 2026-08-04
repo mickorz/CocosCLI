@@ -27,16 +27,14 @@ program
 // init：为当前 Cocos 工程安装 CocosMCP 扩展并打开
 program
   .command('init')
-  .description('为当前 Cocos 工程安装 CocosMCP 扩展并打开')
-  .option('--nologin', '打开时不提示登录')
-  .action((options: { nologin?: boolean }) => init(options.nologin === true));
+  .description('为当前 Cocos 工程安装 CocosMCP 扩展并打开（默认免登录）')
+  .action(() => init());
 
 // open：用 CocosCreator 打开工程，dir 省略时为当前目录
 program
   .command('open [dir]')
-  .description('用 CocosCreator 打开工程，dir 省略时为当前目录')
-  .option('--nologin', '打开时不提示登录')
-  .action((dir: string | undefined, options: { nologin?: boolean }) => open(dir, options.nologin === true));
+  .description('用 CocosCreator 打开工程（默认免登录），dir 省略时为当前目录')
+  .action((dir?: string) => open(dir));
 
 // close：关闭工程对应的 CocosCreator 进程，dir 省略时为当前目录
 program

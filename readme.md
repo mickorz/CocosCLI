@@ -1,13 +1,13 @@
 # cocoscli
 
-面向 Cocos Creator 3.7.x 的轻量命令行工具，提供工程初始化扩展、打开工程、关闭进程三个命令。
+面向 Cocos Creator 3.7.x 的轻量命令行工具，提供工程初始化扩展、打开工程、关闭进程三个命令。open 与 init **默认免登录**（启动编辑器时自动追加 `--nologin`）。
 
 ## 功能
 
 | 命令 | 说明 |
 |---|---|
-| `cocoscli init [--nologin]` | 为当前 Cocos 工程安装 CocosMCP 扩展并打开 |
-| `cocoscli open [dir] [--nologin]` | 用 CocosCreator 打开工程，dir 省略时为当前目录 |
+| `cocoscli init` | 为当前 Cocos 工程安装 CocosMCP 扩展并打开（默认免登录） |
+| `cocoscli open [dir]` | 用 CocosCreator 打开工程，dir 省略时为当前目录（默认免登录） |
 | `cocoscli close [dir]` | 关闭工程对应的 CocosCreator 进程，dir 省略时为当前目录 |
 
 ## 环境要求
@@ -32,16 +32,17 @@ npm link
 ### 打开工程
 
 ```bash
-cocoscli open                      # 打开当前目录工程
-cocoscli open D:\MyGame            # 打开指定工程
-cocoscli open D:\MyGame --nologin  # 打开时不提示登录
+cocoscli open                # 打开当前目录工程（默认免登录）
+cocoscli open D:\MyGame      # 打开指定工程（默认免登录）
 ```
+
+open 会在启动 CocosCreator 时自动追加 `--nologin` 参数，跳过登录提示。
 
 ### 关闭工程
 
 ```bash
-cocoscli close                     # 关闭当前目录对应的进程
-cocoscli close D:\MyGame           # 关闭指定工程对应的进程
+cocoscli close               # 关闭当前目录对应的进程
+cocoscli close D:\MyGame     # 关闭指定工程对应的进程
 ```
 
 close 通过匹配 CocosCreator 进程命令行的 `--project` 参数定位目标工程，精确比对路径，不会误关同名前缀工程。
@@ -50,8 +51,7 @@ close 通过匹配 CocosCreator 进程命令行的 `--project` 参数定位目�
 
 ```bash
 cd D:\MyGame
-cocoscli init                      # 初始化扩展并打开
-cocoscli init --nologin            # 初始化并免登录打开
+cocoscli init                # 初始化扩展并打开（默认免登录）
 ```
 
 init 会依次执行：
@@ -59,9 +59,7 @@ init 会依次执行：
 1. 定位本机 CocosCreator（5 级查找）
 2. 判定当前目录是否 Cocos 3.x 工程
 3. 克隆 CocosMCP 扩展到 `extensions/CocosMCP`
-4. 用 CocosCreator 打开工程
-
-`--nologin` 会在打开编辑器时追加 `--nologin` 参数，跳过登录提示。
+4. 用 CocosCreator 打开工程（自动追加 `--nologin`）
 
 ## CocosCreator 定位优先级
 

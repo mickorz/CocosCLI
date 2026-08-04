@@ -197,15 +197,15 @@ describe('pickEditorFiles', () => {
 });
 
 describe('buildOpenArgs', () => {
-  it('默认只含 --project', () => {
-    expect(buildOpenArgs('D:\\A')).toEqual(['--project', 'D:\\A']);
-  });
-
-  it('noLogin 为 true 追加 --nologin', () => {
-    expect(buildOpenArgs('D:\\A', true)).toEqual(['--project', 'D:\\A', '--nologin']);
+  it('默认追加 --nologin（免登录）', () => {
+    expect(buildOpenArgs('D:\\A')).toEqual(['--project', 'D:\\A', '--nologin']);
   });
 
   it('noLogin 为 false 不追加 --nologin', () => {
     expect(buildOpenArgs('D:\\A', false)).toEqual(['--project', 'D:\\A']);
+  });
+
+  it('noLogin 为 true 追加 --nologin', () => {
+    expect(buildOpenArgs('D:\\A', true)).toEqual(['--project', 'D:\\A', '--nologin']);
   });
 });

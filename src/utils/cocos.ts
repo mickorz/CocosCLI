@@ -350,7 +350,7 @@ function buildNotFoundMessage(): string {
  * 构造打开工程的命令行参数
  * @param noLogin 为 true 时追加 --nologin，打开时不提示登录
  */
-export function buildOpenArgs(projectPath: string, noLogin = false): string[] {
+export function buildOpenArgs(projectPath: string, noLogin = true): string[] {
   const args = ['--project', projectPath];
   if (noLogin) args.push('--nologin');
   return args;
@@ -361,7 +361,7 @@ export function buildOpenArgs(projectPath: string, noLogin = false): string[] {
  * spawn detached + unref，CLI 拉起编辑器后可立即退出
  * @param noLogin 为 true 时追加 --nologin，打开时不提示登录
  */
-export function openCocosProject(creatorPath: string, projectPath: string, noLogin = false): void {
+export function openCocosProject(creatorPath: string, projectPath: string, noLogin = true): void {
   const child = spawn(creatorPath, buildOpenArgs(projectPath, noLogin), {
     detached: true,
     stdio: 'ignore',

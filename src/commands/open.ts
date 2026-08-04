@@ -8,7 +8,7 @@ import { isCocosProject } from '../utils/project.js';
  *
  * @param projectDir 工程目录，省略时默认当前执行目录
  */
-export function open(projectDir?: string, noLogin = false): void {
+export function open(projectDir?: string, noLogin = true): void {
   const dir = path.resolve(projectDir ?? process.cwd());
 
   if (!isCocosProject(dir)) {

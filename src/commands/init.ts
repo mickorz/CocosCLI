@@ -13,7 +13,7 @@ import { cloneCocosMcp, COCOS_MCP_URL } from '../utils/git.js';
  *   3. 克隆 CocosMCP 到 extensions/CocosMCP
  *   4. 打开工程（复用 open 的核心函数）
  */
-export function init(noLogin = false): void {
+export function init(noLogin = true): void {
   const cwd = process.cwd();
 
   // 第一步：定位 CocosCreator
