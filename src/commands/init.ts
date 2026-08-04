@@ -10,7 +10,7 @@ import { cloneCocosMcp, buildCocosMcp, COCOS_MCP_URL } from '../utils/git.js';
  * 五步流程：
  *   1. 定位 CocosCreator（5 级查找，找不到则报错退出）
  *   2. 判定当前目录是否 Cocos 3.x 工程（不是则中止）
- *   3. 安装 CocosMCP 到 extensions/CocosMCP（git 工程用 submodule，否则普通 clone）
+ *   3. 克隆 CocosMCP 到 extensions/CocosMCP（普通 git clone）
  *   4. 构建 CocosMCP（npm install + build，生成 dist，否则 CocosCreator 加载报错）
  *   5. 打开工程（复用 open 的核心函数）
  */
@@ -33,18 +33,13 @@ export function init(noLogin = true): void {
     process.exit(1);
   }
 
-  // 第三步：安装 CocosMCP 到 extensions（git 工程用 submodule，非 git 工程用普通 clone）
-  const spinner = ora('安装 CocosMCP 扩展...').start();
+  // 第三步：克隆 CocosMCP 到 extensions（普通 git clone）
+  const spinner = ora('克隆 CocosMCP 扩展...').start();
   try {
     const result = cloneCocosMcp(cwd);
-    const methodLabel = result.method === 'submodule' ? 'submodule' : '普通 clone';
-    spinner.succeed(
-      result.status === 'exists'
-        ? `CocosMCP 已存在（${methodLabel}），跳过`
-        : `CocosMCP ${result.method === 'submodule' ? 'submodule 添加' : '克隆'}完成`
-    );
+    spinner.succeed(result.status === 'exists' ? 'CocosMCP 已存在，跳过克隆' : 'CocosMCP 克隆完成');
   } catch (e) {
-    spinner.fail('安装 CocosMCP 失败');
+    spinner.fail('克隆 CocosMCP 失败');
     console.log(chalk.red(e instanceof Error ? e.message : String(e)));
     console.log(chalk.gray(`请确认本地 Gitea 服务在运行：${COCOS_MCP_URL}`));
     process.exit(1);

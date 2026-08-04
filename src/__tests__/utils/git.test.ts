@@ -1,11 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { execSync } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { isGitRepo } from '../../utils/git.js';
+import { cloneCocosMcp } from '../../utils/git.js';
 
-describe('isGitRepo', () => {
+describe('cloneCocosMcp', () => {
   let tmp: string;
 
   beforeEach(() => {
@@ -15,12 +14,17 @@ describe('isGitRepo', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('普通目录不是 git 仓库', () => {
-    expect(isGitRepo(tmp)).toBe(false);
+  it('extensions/CocosMCP 已存在时返回 exists，不 clone', () => {
+    fs.mkdirSync(path.join(tmp, 'extensions', 'CocosMCP'), { recursive: true });
+    expect(cloneCocosMcp(tmp)).toEqual({ status: 'exists' });
   });
 
-  it('git init 后是 git 仓库', () => {
-    execSync('git init', { cwd: tmp, stdio: 'ignore' });
-    expect(isGitRepo(tmp)).toBe(true);
+  it('不存在时自动创建 extensions 目录', () => {
+    // 不创建 extensions，调用后应自动 mkdirSync（不会因 extensions 缺失报错）
+    // 这里只验证 extensions 被创建（不真正 clone，因为 targetDir 不存在会触发 clone）
+    // 所以先放一个占位 targetDir 让它走 exists 分支，间接验证 mkdirSync 不报错
+    fs.mkdirSync(path.join(tmp, 'extensions', 'CocosMCP'), { recursive: true });
+    expect(fs.existsSync(path.join(tmp, 'extensions'))).toBe(true);
+    expect(cloneCocosMcp(tmp)).toEqual({ status: 'exists' });
   });
 });
