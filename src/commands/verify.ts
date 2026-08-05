@@ -1,0 +1,132 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import chalk from 'chalk';
+import { isCocosProject } from '../utils/project.js';
+import { getCocosCreatorPath, openCocosProject } from '../utils/cocos.js';
+import {
+  runTscCheck,
+  verifyMcpConnection,
+  verifyPreviewUrl,
+  runOpencodeMonitored,
+  OpencodeResult,
+} from '../utils/verify.js';
+
+// verify 命令：编排四步验证
+//
+// 第1步  cocoscli open 启动 CocosCreator，等编辑器与 CocosMCP 加载
+// 第2步  tsc --noEmit 编译检查，解析 error
+// 第3步  HTTP 验证 MCP（3001/health）与 preview（7456）
+// 第4步  opencode run --format json 预览 {场景}，事件流监控状态
+// 最后   汇总报告写到 .cocoscli/verify-report.md
+
+/** 等待 ms */
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * verify 命令：验证工程（编译 + MCP/preview + opencode 预览场景）
+ *
+ * @param projectDir 工程目录，省略时默认当前执行目录
+ * @param scene 要预览的场景名（如 loading）
+ */
+export async function verify(projectDir: string | undefined, scene: string): Promise<void> {
+  const dir = path.resolve(projectDir ?? process.cwd());
+
+  if (!scene) {
+    console.log(chalk.red('请指定场景，例如：cocoscli verify <场景> [工程目录]'));
+    process.exit(1);
+  }
+
+  if (!isCocosProject(dir)) {
+    console.log(chalk.red(`目标目录不是 Cocos 3.x 工程：${dir}`));
+    console.log(chalk.gray('Cocos 工程根目录应同时包含 assets/ 与 settings/'));
+    process.exit(1);
+  }
+
+  console.log(chalk.cyan(`开始 verify ${dir}`));
+  console.log(chalk.cyan(`场景：${scene}\n`));
+
+  const report: string[] = [
+    '# cocoscli verify 报告',
+    '',
+    `- 工程：${dir}`,
+    `- 场景：${scene}`,
+    `- 时间：${new Date().toISOString()}`,
+    '',
+  ];
+
+  // 第1步：启动 CocosCreator
+  console.log(chalk.blue('第1步 启动 CocosCreator'));
+  let creatorPath: string;
+  try {
+    creatorPath = getCocosCreatorPath();
+  } catch (e) {
+    console.log(chalk.red(e instanceof Error ? e.message : String(e)));
+    process.exit(1);
+  }
+  openCocosProject(creatorPath, dir);
+  console.log(chalk.gray('  已拉起，等待编辑器与 CocosMCP 加载（约 30 秒）...'));
+  report.push('## 第1步 启动 CocosCreator', '- 已拉起 CocosCreator', '');
+  await sleep(30000);
+
+  // 第2步：tsc 编译检查
+  console.log(chalk.blue('\n第2步 脚本编译检查 tsc --noEmit'));
+  const tsc = runTscCheck(dir);
+  if (!tsc.ran) {
+    console.log(chalk.gray('  无 tsconfig.json，跳过'));
+    report.push('## 第2步 编译检查', '- 无 tsconfig.json，跳过', '');
+  } else if (tsc.errors.length === 0) {
+    console.log(chalk.green('  无 error'));
+    report.push('## 第2步 编译检查', '- 无 error', '');
+  } else {
+    console.log(chalk.red(`  发现 ${tsc.errors.length} 个 error：`));
+    report.push('## 第2步 编译检查', `- 发现 ${tsc.errors.length} 个 error：`, '');
+    tsc.errors.forEach((e) => {
+      const line = `${e.file}(${e.line},${e.col}): ${e.code} ${e.message}`;
+      console.log(chalk.gray(`    ${line}`));
+      report.push(`- ${line}`);
+    });
+    report.push('');
+  }
+
+  // 第3步：MCP + preview 验证
+  console.log(chalk.blue('\n第3步 验证 MCP 与 preview'));
+  const mcpOk = await verifyMcpConnection();
+  const previewOk = await verifyPreviewUrl();
+  console.log(chalk.gray(`  MCP (127.0.0.1:3001/health)：${mcpOk ? '可访问' : '不可访问'}`));
+  console.log(chalk.gray(`  preview (localhost:7456)：${previewOk ? '可访问' : '不可访问'}`));
+  report.push(
+    '## 第3步 MCP 与 preview 验证',
+    `- MCP (3001/health)：${mcpOk ? '可访问' : '不可访问'}`,
+    `- preview (7456)：${previewOk ? '可访问' : '不可访问'}`,
+    ''
+  );
+
+  // 第4步：opencode 预览场景（事件流监控）
+  console.log(chalk.blue('\n第4步 opencode 预览场景（事件流监控）'));
+  const prompt = `预览 ${scene} 场景`;
+  console.log(chalk.gray(`  prompt：${prompt}`));
+  const result: OpencodeResult = await runOpencodeMonitored(prompt, dir, (st, info) => {
+    const line = info ? `[${st}] ${info}` : `[${st}]`;
+    console.log(chalk.gray(`  ${line}`));
+  });
+  const succ = result.state === 'SUCCEEDED';
+  console.log(succ ? chalk.green(`  预览结果：${result.state}`) : chalk.red(`  预览结果：${result.state}`));
+  report.push(
+    '## 第4步 opencode 预览场景',
+    `- 最终状态：${result.state}`,
+    `- 退出码：${result.exitCode}`,
+    `- 调用工具：${result.toolsCalled.join(', ') || '(无)'}`,
+    result.error ? `- 错误：${result.error}` : '',
+    ''
+  );
+
+  // 写报告
+  const reportDir = path.join(dir, '.cocoscli');
+  fs.mkdirSync(reportDir, { recursive: true });
+  const reportPath = path.join(reportDir, 'verify-report.md');
+  fs.writeFileSync(reportPath, report.filter(Boolean).join('\n') + '\n', 'utf-8');
+
+  console.log(chalk.green(`\n验证完成，报告：${reportPath}`));
+}

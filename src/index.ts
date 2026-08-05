@@ -18,6 +18,7 @@ import { open } from './commands/open.js';
 import { close } from './commands/close.js';
 import { remove } from './commands/remove.js';
 import { build } from './commands/build.js';
+import { verify } from './commands/verify.js';
 
 const program = new Command();
 
@@ -55,6 +56,12 @@ program
   .command('build <platform> [dir]')
   .description('构建工程到指定平台（web/web-desktop、web-mobile、wechat、douyin 等），dir 省略时为当前目录')
   .action((platform: string, dir?: string) => build(dir, platform));
+
+// verify：验证工程（编译检查 + MCP/preview 验证 + opencode 预览场景）
+program
+  .command('verify <scene> [dir]')
+  .description('验证工程：tsc 编译检查 + MCP/preview 连通性 + opencode 预览指定场景，事件流监控')
+  .action(async (scene: string, dir?: string) => verify(dir, scene));
 
 // 无参数时显示帮助
 if (process.argv.length === 2) {

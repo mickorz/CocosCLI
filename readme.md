@@ -11,6 +11,7 @@
 | `cocoscli close [dir]` | 关闭工程对应的 CocosCreator 进程，dir 省略时为当前目录 |
 | `cocoscli remove [dir]` | 卸载 CocosMCP（关闭工程、删除扩展与 settings 配置），dir 省略时为当前目录 |
 | `cocoscli build <platform> [dir]` | 构建工程到指定平台（web-desktop/wechat/douyin 等），dir 省略时为当前目录 |
+| `cocoscli verify <scene> [dir]` | 验证工程：tsc 编译检查 + MCP/preview 连通性 + opencode 预览场景，dir 省略时为当前目录 |
 
 ## 环境要求
 
@@ -68,6 +69,15 @@ cocoscli build douyin                 # 抖音小游戏（映射到 bytedancegam
 ```
 
 build 内置打包逻辑：定位 CocosCreator → 生成通用 buildConfig（`.cocoscli/buildConfig-<platform>.json`）→ 调 `CocosCreator --project <工程> --build configPath=...`，产物在 `build/<platform>/`。支持的平台简称：`web`/`web-desktop`、`web-mobile`、`wechat`/`wechatgame`、`douyin`/`bytedance`/`bytedancegame`，其它名字原样传给 CocosCreator。
+
+### 验证工程
+
+```bash
+cocoscli verify loading                      # 验证当前工程的 loading 场景
+cocoscli verify loading D:\MyGame            # 验证指定工程
+```
+
+verify 会：启动 CocosCreator → `tsc --noEmit` 编译检查 → 验证 MCP 与 preview 连通 → 调 opencode（非交互，`run --format json`）预览场景并事件流监控，最后输出 `.cocoscli/verify-report.md`。状态监控细节见 `Docs/cocoscli-verify-opencode状态监控.md`。
 
 ### 初始化扩展
 
