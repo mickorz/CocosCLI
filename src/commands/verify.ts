@@ -8,6 +8,7 @@ import {
   verifyMcpConnection,
   httpOk,
   fetchPreviewUrl,
+  readMcpPort,
   runOpencodeMonitored,
   OpencodeResult,
 } from '../utils/verify.js';
@@ -46,8 +47,10 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
     process.exit(1);
   }
 
+  const mcpPort = readMcpPort(dir);
   console.log(chalk.cyan(`开始 verify ${dir}`));
-  console.log(chalk.cyan(`场景：${scene}\n`));
+  console.log(chalk.cyan(`场景：${scene}`));
+  console.log(chalk.gray(`MCP 端口：${mcpPort}\n`));
 
   const report: string[] = [
     '# cocoscli verify 报告',
@@ -83,7 +86,7 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
   console.log(chalk.gray('  等待 CocosMCP 就绪（轮询 3001/health，最多 90 秒）...'));
   let mcpReady = false;
   for (let i = 0; i < 18; i++) {
-    if (await verifyMcpConnection()) {
+    if (await verifyMcpConnection(mcpPort)) {
       mcpReady = true;
       break;
     }
@@ -93,7 +96,7 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
 
   // 第2步：编译检查 + 自动修复循环（调 cocos-mcp run_script_diagnostics，用编辑器内置 tsc）
   console.log(chalk.blue('\n第2步 编译检查（cocos-mcp run_script_diagnostics，含自动修复循环，最多 3 轮）'));
-  let diag = await runScriptDiagnosticsViaMcp();
+  let diag = await runScriptDiagnosticsViaMcp(mcpPort);
   if (!diag.ran) {
     console.log(chalk.gray('  cocos-mcp run_script_diagnostics 不可用，跳过'));
     report.push('## 第2步 编译检查', '- cocos-mcp run_script_diagnostics 不可用，跳过', '');
@@ -119,7 +122,7 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
         break;
       }
       console.log(chalk.gray('  修复完成，重跑编译检查...'));
-      diag = await runScriptDiagnosticsViaMcp();
+      diag = await runScriptDiagnosticsViaMcp(mcpPort);
     }
     if (diag.errors.length === 0) {
       const note = round > 0 ? `（经 ${round} 轮修复）` : '';
@@ -140,7 +143,7 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
   // 第3步：MCP + preview 验证（preview 用动态 previewUrl，调 cocos-mcp server_information 查真实地址）
   console.log(chalk.blue('\n第3步 验证 MCP 与 preview'));
   const mcpOk = await verifyMcpConnection();
-  const previewUrl = await fetchPreviewUrl();
+  const previewUrl = await fetchPreviewUrl(mcpPort);
   const previewOk = previewUrl ? await httpOk(previewUrl) : false;
   console.log(chalk.gray(`  MCP (3001/health)：${mcpOk ? '可访问' : '不可访问'}`));
   console.log(chalk.gray(`  preview (${previewUrl || '未获取到'})：${previewOk ? '可访问' : '不可访问'}`));

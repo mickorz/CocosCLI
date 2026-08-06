@@ -211,6 +211,24 @@ export async function runScriptDiagnosticsViaMcp(
   return { errors: diagnostics, ran: true };
 }
 
+/**
+ * 读目标工程 settings/mcp-server.json 的 port
+ * 多工程时 CocosMCP 端口可能不是 3001（init 错开或手改），不能写死
+ * @returns port（默认 3001）
+ */
+export function readMcpPort(projectPath: string): number {
+  try {
+    const mcpConfig = path.join(projectPath, 'settings', 'mcp-server.json');
+    if (fs.existsSync(mcpConfig)) {
+      const cfg = JSON.parse(fs.readFileSync(mcpConfig, 'utf-8')) as { port?: unknown };
+      if (typeof cfg.port === 'number' && cfg.port > 0) return cfg.port;
+    }
+  } catch {
+    // 忽略，返回默认
+  }
+  return 3001;
+}
+
 // ==================== opencode 事件流监控 ====================
 
 /** opencode 任务状态 */
