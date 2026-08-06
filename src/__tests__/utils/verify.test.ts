@@ -44,41 +44,39 @@ describe('parseOpencodeEvent', () => {
 });
 
 describe('updateStateFromEvent', () => {
-  it('session.status busy → BUSY', () => {
-    const e = { type: 'session.status', properties: { status: { type: 'busy' } } };
+  it('step_start → BUSY', () => {
+    const e = { type: 'step_start', part: { type: 'step-start' } };
     expect(updateStateFromEvent(e, 'STARTING').state).toBe('BUSY');
   });
 
-  it('session.status idle → IDLE', () => {
-    const e = { type: 'session.status', properties: { status: { type: 'idle' } } };
+  it('step_finish → IDLE', () => {
+    const e = { type: 'step_finish', part: { type: 'step-finish', reason: 'stop' } };
     expect(updateStateFromEvent(e, 'BUSY').state).toBe('IDLE');
   });
 
-  it('session.status retry 视为 BUSY', () => {
-    const e = { type: 'session.status', properties: { status: { type: 'retry' } } };
-    expect(updateStateFromEvent(e, 'IDLE').state).toBe('BUSY');
-  });
-
-  it('session.idle → IDLE', () => {
-    const e = { type: 'session.idle' };
-    expect(updateStateFromEvent(e, 'BUSY').state).toBe('IDLE');
-  });
-
-  it('session.error → FAILED 且带 error', () => {
-    const e = { type: 'session.error', properties: { error: { msg: 'boom' } } };
-    const r = updateStateFromEvent(e, 'BUSY');
-    expect(r.state).toBe('FAILED');
-    expect(r.error).toBeTruthy();
-  });
-
-  it('message.part.updated tool running → RUNNING_TOOL 且带 tool 名', () => {
+  it('tool_use running → RUNNING_TOOL 且带 tool 名', () => {
     const e = {
-      type: 'message.part.updated',
-      properties: { part: { type: 'tool', tool: 'navigate_page', state: { status: 'running' } } },
+      type: 'tool_use',
+      part: { type: 'tool', tool: 'read', state: { status: 'running' } },
     };
     const r = updateStateFromEvent(e, 'BUSY');
     expect(r.state).toBe('RUNNING_TOOL');
-    expect(r.tool).toBe('navigate_page');
+    expect(r.tool).toBe('read');
+  });
+
+  it('tool_use completed → 状态不变但记录 tool 名', () => {
+    const e = {
+      type: 'tool_use',
+      part: { type: 'tool', tool: 'read', state: { status: 'completed' } },
+    };
+    const r = updateStateFromEvent(e, 'BUSY');
+    expect(r.state).toBe('BUSY');
+    expect(r.tool).toBe('read');
+  });
+
+  it('text → 状态不变', () => {
+    const e = { type: 'text', part: { type: 'text', text: 'ok' } };
+    expect(updateStateFromEvent(e, 'BUSY').state).toBe('BUSY');
   });
 
   it('未知事件保持当前状态', () => {

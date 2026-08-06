@@ -10,6 +10,7 @@ import {
   runOpencodeMonitored,
   OpencodeResult,
 } from '../utils/verify.js';
+import { findCocosProcesses, isProjectMatch } from '../utils/process.js';
 
 // verify 命令：编排四步验证
 //
@@ -65,10 +66,29 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
     console.log(chalk.red(e instanceof Error ? e.message : String(e)));
     process.exit(1);
   }
-  openCocosProject(creatorPath, dir);
-  console.log(chalk.gray('  已拉起，等待编辑器与 CocosMCP 加载（约 30 秒）...'));
-  report.push('## 第1步 启动 CocosCreator', '- 已拉起 CocosCreator', '');
-  await sleep(30000);
+  // 检测 CocosCreator 是否已开（同工程），已开则跳过 open，避免重复 --project 触发重启
+  const procs = findCocosProcesses();
+  const alreadyRunning = procs.some((p) => isProjectMatch(p.command, dir));
+  if (alreadyRunning) {
+    console.log(chalk.gray('  CocosCreator 已在运行，跳过启动（不重启）'));
+    report.push('## 第1步 启动 CocosCreator', '- CocosCreator 已在运行，跳过启动', '');
+  } else {
+    openCocosProject(creatorPath, dir);
+    console.log(chalk.gray('  已拉起 CocosCreator'));
+    report.push('## 第1步 启动 CocosCreator', '- 已拉起 CocosCreator', '');
+  }
+
+  // 轮询 CocosMCP health 直到就绪（替代固定 sleep，CocosCreator 启动慢时等够）
+  console.log(chalk.gray('  等待 CocosMCP 就绪（轮询 3001/health，最多 90 秒）...'));
+  let mcpReady = false;
+  for (let i = 0; i < 18; i++) {
+    if (await verifyMcpConnection()) {
+      mcpReady = true;
+      break;
+    }
+    await sleep(5000);
+  }
+  console.log(chalk.gray(`  CocosMCP ${mcpReady ? '已就绪' : '未就绪（超时，后续 MCP 验证可能失败）'}`));
 
   // 第2步：tsc 编译检查
   console.log(chalk.blue('\n第2步 脚本编译检查 tsc --noEmit'));
@@ -105,7 +125,8 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
 
   // 第4步：opencode 预览场景（事件流监控）
   console.log(chalk.blue('\n第4步 opencode 预览场景（事件流监控）'));
-  const prompt = `预览 ${scene} 场景`;
+  // prompt 必须明确点名 skill，否则 glm-5.2 不会主动调用 cocos-preview-scene，会退化为用基础工具摸索
+  const prompt = `请使用 cocos-preview-scene skill 预览 ${scene} 场景`;
   console.log(chalk.gray(`  prompt：${prompt}`));
   const result: OpencodeResult = await runOpencodeMonitored(prompt, dir, (st, info) => {
     const line = info ? `[${st}] ${info}` : `[${st}]`;

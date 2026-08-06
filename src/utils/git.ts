@@ -93,3 +93,29 @@ export function writeDefaultMcpServerConfig(projectPath: string): 'written' | 'e
   fs.writeFileSync(filePath, JSON.stringify(DEFAULT_MCP_SERVER_CONFIG, null, 2) + '\n', 'utf-8');
   return 'written';
 }
+
+/** 工程根 opencode.json 文件名（opencode 项目配置） */
+const OPENCODE_CONFIG_FILE = 'opencode.json';
+
+/** 默认 opencode.json 配置：放开 external_directory 权限，避免 opencode 访问工程外目录时被 auto-reject */
+const DEFAULT_OPENCODE_CONFIG = {
+  $schema: 'https://opencode.ai/config.json',
+  permission: {
+    external_directory: 'allow',
+  },
+};
+
+/**
+ * 写默认 opencode.json 到工程根（放开 external_directory 权限，供 verify 使用）
+ * 已存在则跳过（不覆盖用户配置）
+ *
+ * @returns written 已写入 / exists 已存在跳过
+ */
+export function writeOpencodePermission(projectPath: string): 'written' | 'exists' {
+  const filePath = path.join(projectPath, OPENCODE_CONFIG_FILE);
+  if (fs.existsSync(filePath)) {
+    return 'exists';
+  }
+  fs.writeFileSync(filePath, JSON.stringify(DEFAULT_OPENCODE_CONFIG, null, 2) + '\n', 'utf-8');
+  return 'written';
+}

@@ -124,38 +124,39 @@ export function parseOpencodeEvent(line: string): Record<string, unknown> | null
 
 /**
  * 根据事件更新状态机
- * 返回新状态 + 附带信息（工具名 / 错误）
+ *
+ * opencode 真实事件（debug 确认，非二手资料）：
+ *   step_start  → 步骤开始
+ *   text        → 文本输出（part.text）
+ *   tool_use    → 工具调用（part.tool、part.state.status: running/completed）
+ *   step_finish → 步骤结束（part.reason: stop）
+ *
+ * 返回新状态 + 附带信息（工具名）
  */
 export function updateStateFromEvent(
   event: Record<string, unknown>,
   current: OpencodeState
-): { state: OpencodeState; tool?: string; error?: string } {
+): { state: OpencodeState; tool?: string } {
   const type = event.type as string | undefined;
-  const props = (event.properties ?? {}) as Record<string, unknown>;
+  const part = (event.part ?? {}) as Record<string, unknown>;
 
-  if (type === 'session.status') {
-    const status = (props.status ?? {}) as Record<string, unknown>;
-    const statusType = status.type as string | undefined;
-    if (statusType === 'busy') return { state: 'BUSY' };
-    if (statusType === 'idle') return { state: 'IDLE' };
-    // retry 仍视为在执行
-    if (statusType === 'retry') return { state: 'BUSY' };
+  if (type === 'step_start') {
+    return { state: 'BUSY' };
   }
-  if (type === 'session.idle') {
+  if (type === 'step_finish') {
     return { state: 'IDLE' };
   }
-  if (type === 'session.error') {
-    return { state: 'FAILED', error: JSON.stringify(props.error ?? '') };
-  }
-  if (type === 'message.part.updated') {
-    const part = (props.part ?? {}) as Record<string, unknown>;
-    if (part.type === 'tool') {
-      const partState = (part.state ?? {}) as Record<string, unknown>;
-      if (partState.status === 'running') {
-        return { state: 'RUNNING_TOOL', tool: part.tool as string };
-      }
+  if (type === 'tool_use') {
+    const partState = (part.state ?? {}) as Record<string, unknown>;
+    const status = partState.status as string | undefined;
+    const tool = part.tool as string | undefined;
+    if (status === 'running') {
+      return { state: 'RUNNING_TOOL', tool };
     }
+    // completed 等状态：记录工具名，状态不变
+    return { state: current, tool };
   }
+  // text 及未知事件：不改状态
   return { state: current };
 }
 
@@ -176,10 +177,13 @@ export function runOpencodeMonitored(
     const child = spawn(
       'opencode',
       ['run', '--format', 'json', '--title', 'cocoscli-verify', prompt],
-      { cwd, stdio: ['ignore', 'pipe', 'inherit'], shell: true }
+      // env 必须带 PWD：opencode.exe 靠 PWD 环境变量定位项目根并加载 .opencode/skills，
+      // Windows 的 cmd / Node spawn 默认不设 PWD，不带则项目 skill 加载不到
+      { cwd, stdio: ['ignore', 'pipe', 'inherit'], shell: true, env: { ...process.env, PWD: cwd } }
     );
 
     let state: OpencodeState = 'STARTING';
+    let sawStepStart = false;
     const toolsCalled: string[] = [];
     const todos: { content: string; status: string }[] = [];
     let errorMsg: string | undefined;
@@ -195,21 +199,15 @@ export function runOpencodeMonitored(
         const event = parseOpencodeEvent(line);
         if (!event) continue;
 
+        // 记录是否真正开始执行（用于最终严格判定）
+        if (event.type === 'step_start') sawStepStart = true;
+
         const upd = updateStateFromEvent(event, state);
         if (upd.state !== state) {
           state = upd.state;
         }
         if (upd.tool && !toolsCalled.includes(upd.tool)) {
           toolsCalled.push(upd.tool);
-        }
-        if (upd.error) errorMsg = upd.error;
-
-        // 收集 todo
-        if (event.type === 'todo.updated') {
-          const todoProps = (event.properties ?? {}) as Record<string, unknown>;
-          const list = (todoProps.todos ?? []) as { content: string; status: string }[];
-          todos.length = 0;
-          todos.push(...list);
         }
 
         onProgress?.(state, upd.tool ?? '');
@@ -218,14 +216,17 @@ export function runOpencodeMonitored(
 
     child.on('close', (code: number | null) => {
       const exitCode = code ?? 0;
+      // 严格判定：必须看到 step_start（证明 opencode 真正执行过）+ 退出码 0 才算成功
       let finalState: OpencodeState;
-      if (errorMsg || exitCode !== 0) {
+      if (exitCode !== 0 || !sawStepStart) {
         finalState = 'FAILED';
-      } else if (state === 'IDLE') {
-        finalState = 'SUCCEEDED';
+        if (!errorMsg) {
+          errorMsg = sawStepStart
+            ? `opencode 退出码 ${exitCode}`
+            : 'opencode 未执行任何步骤（未收到 step_start 事件，可能权限被拒）';
+        }
       } else {
-        // 没看到 idle 但退出码 0，保守算成功
-        finalState = exitCode === 0 ? 'SUCCEEDED' : 'FAILED';
+        finalState = 'SUCCEEDED';
       }
       resolve({ state: finalState, exitCode, toolsCalled, todos, error: errorMsg });
     });
