@@ -173,6 +173,44 @@ export async function fetchPreviewUrl(mcpPort = 3001): Promise<string | null> {
   return typeof previewUrl === 'string' && previewUrl ? previewUrl : null;
 }
 
+// ==================== cocos-mcp run_script_diagnostics（编译检查） ====================
+
+/** 一条脚本编译 error（cocos-mcp run_script_diagnostics 返回） */
+export interface ScriptDiagnostic {
+  file: string;
+  line: number;
+  column: number;
+  code: string;
+  message: string;
+}
+
+/**
+ * 调 cocos-mcp run_script_diagnostics 检查 assets 编译 error
+ *
+ * 用 CocosCreator 编辑器内置 tsc（版本和 CocosCreator 一致，无 typescript 版本/cc 声明兼容坑），
+ * 替代之前的 npx tsc（坑2 找不到 typescript + 坑3 版本/cc 声明不兼容）。
+ * 端点：POST http://127.0.0.1:{mcpPort}/api/debug/run_script_diagnostics
+ *
+ * @returns errors 诊断列表 / ran 是否成功调用（false 表示 cocos-mcp 不可用）
+ */
+export async function runScriptDiagnosticsViaMcp(
+  mcpPort = 3001
+): Promise<{ errors: ScriptDiagnostic[]; ran: boolean }> {
+  // run_script_diagnostics 调编辑器内置 tsc 编译 assets，耗时较长（可能 >5 秒），timeout 给 60 秒
+  const resp = await httpPostJson(
+    `http://127.0.0.1:${mcpPort}/api/debug/run_script_diagnostics`,
+    {},
+    60000
+  );
+  if (!resp) {
+    return { errors: [], ran: false };
+  }
+  const result = (resp.result ?? {}) as Record<string, unknown>;
+  const data = (result.data ?? {}) as Record<string, unknown>;
+  const diagnostics = (data.diagnostics ?? []) as ScriptDiagnostic[];
+  return { errors: diagnostics, ran: true };
+}
+
 // ==================== opencode 事件流监控 ====================
 
 /** opencode 任务状态 */

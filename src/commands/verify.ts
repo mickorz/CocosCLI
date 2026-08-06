@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
 import { getCocosCreatorPath, openCocosProject } from '../utils/cocos.js';
 import {
-  runTscCheck,
+  runScriptDiagnosticsViaMcp,
   verifyMcpConnection,
   httpOk,
   fetchPreviewUrl,
@@ -91,24 +91,23 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
   }
   console.log(chalk.gray(`  CocosMCP ${mcpReady ? '已就绪' : '未就绪（超时，后续 MCP 验证可能失败）'}`));
 
-  // 第2步：tsc 编译检查 + 自动修复循环（阶段2）
-  // 有 error 就调 opencode 修复，重跑 tsc，循环到无 error 或达到最大轮数
-  console.log(chalk.blue('\n第2步 脚本编译检查 tsc --noEmit（含自动修复循环，最多 3 轮）'));
-  let tsc = runTscCheck(dir);
-  if (!tsc.ran) {
-    console.log(chalk.gray('  无 tsconfig.json，跳过'));
-    report.push('## 第2步 编译检查', '- 无 tsconfig.json，跳过', '');
+  // 第2步：编译检查 + 自动修复循环（调 cocos-mcp run_script_diagnostics，用编辑器内置 tsc）
+  console.log(chalk.blue('\n第2步 编译检查（cocos-mcp run_script_diagnostics，含自动修复循环，最多 3 轮）'));
+  let diag = await runScriptDiagnosticsViaMcp();
+  if (!diag.ran) {
+    console.log(chalk.gray('  cocos-mcp run_script_diagnostics 不可用，跳过'));
+    report.push('## 第2步 编译检查', '- cocos-mcp run_script_diagnostics 不可用，跳过', '');
   } else {
     let round = 0;
     const maxRounds = 3;
-    while (tsc.errors.length > 0 && round < maxRounds) {
+    while (diag.errors.length > 0 && round < maxRounds) {
       round++;
-      console.log(chalk.yellow(`\n  第 ${round} 轮：发现 ${tsc.errors.length} 个 error，调 opencode 修复`));
-      tsc.errors.forEach((e) =>
-        console.log(chalk.gray(`    ${e.file}(${e.line},${e.col}): ${e.code} ${e.message}`))
+      console.log(chalk.yellow(`\n  第 ${round} 轮：发现 ${diag.errors.length} 个 error，调 opencode 修复`));
+      diag.errors.forEach((e) =>
+        console.log(chalk.gray(`    ${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`))
       );
-      const errorList = tsc.errors
-        .map((e) => `${e.file}(${e.line},${e.col}): ${e.code} ${e.message}`)
+      const errorList = diag.errors
+        .map((e) => `${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`)
         .join('\n');
       const fixPrompt = `请修复以下 TypeScript 编译 error，只做必要的最小修改，不要改无关代码：\n${errorList}`;
       const fixResult = await runOpencodeMonitored(fixPrompt, dir, (st, info) => {
@@ -119,18 +118,18 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
         report.push('## 第2步 编译检查', `- 第 ${round} 轮 opencode 修复未成功`, '');
         break;
       }
-      console.log(chalk.gray('  修复完成，重跑 tsc 检查...'));
-      tsc = runTscCheck(dir);
+      console.log(chalk.gray('  修复完成，重跑编译检查...'));
+      diag = await runScriptDiagnosticsViaMcp();
     }
-    if (tsc.errors.length === 0) {
+    if (diag.errors.length === 0) {
       const note = round > 0 ? `（经 ${round} 轮修复）` : '';
       console.log(chalk.green(`  无 error${note}`));
       report.push('## 第2步 编译检查', `- 无 error${note}`, '');
     } else {
-      console.log(chalk.red(`  仍有 ${tsc.errors.length} 个 error（${round} 轮修复后）：`));
-      report.push('## 第2步 编译检查', `- 仍有 ${tsc.errors.length} 个 error（${round} 轮修复后）：`, '');
-      tsc.errors.forEach((e) => {
-        const line = `${e.file}(${e.line},${e.col}): ${e.code} ${e.message}`;
+      console.log(chalk.red(`  仍有 ${diag.errors.length} 个 error（${round} 轮修复后）：`));
+      report.push('## 第2步 编译检查', `- 仍有 ${diag.errors.length} 个 error（${round} 轮修复后）：`, '');
+      diag.errors.forEach((e) => {
+        const line = `${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`;
         console.log(chalk.gray(`    ${line}`));
         report.push(`- ${line}`);
       });
