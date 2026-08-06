@@ -46,22 +46,50 @@ export function parseTscErrors(output: string): TscError[] {
 }
 
 /**
- * 跑 npx tsc --noEmit，返回 error 列表
- * 无 tsconfig.json 则跳过（ran=false）
+ * 跑 npx tsc --noEmit 检查 assets 下的 TypeScript 源码，返回 error 列表
+ *
+ * 关键：CocosCreator 的 temp/tsconfig.cocos.json 没有 include 字段（只给 IDE 用 paths 映射），
+ * 直接 --project 它不会检查 assets 源码。所以这里构造一个临时 tsconfig：
+ *   extends temp/tsconfig.cocos.json（复用 cc 类型声明 / db://assets 路径映射）
+ *   include assets 下所有 ts 文件（显式把源码纳入检查）
+ *
+ * 无 temp/tsconfig.cocos.json（编辑器未生成）则跳过（ran=false）
  */
 export function runTscCheck(
   projectPath: string
 ): { errors: TscError[]; raw: string; ran: boolean } {
-  const tsconfig = path.join(projectPath, 'tsconfig.json');
-  if (!fs.existsSync(tsconfig)) {
+  const cocosTsconfig = path.join(projectPath, 'temp', 'tsconfig.cocos.json');
+  if (!fs.existsSync(cocosTsconfig)) {
     return { errors: [], raw: '', ran: false };
   }
-  const result = spawnSync('npx', ['tsc', '--noEmit', '--project', tsconfig], {
-    cwd: projectPath,
-    encoding: 'utf-8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-    shell: true,
-  });
+  // 构造临时 tsconfig 到 .cocoscli/（不入库，gitignore 已含 .cocoscli）
+  const verifyDir = path.join(projectPath, '.cocoscli');
+  fs.mkdirSync(verifyDir, { recursive: true });
+  const verifyTsconfig = path.join(verifyDir, 'tsconfig.verify.json');
+  fs.writeFileSync(
+    verifyTsconfig,
+    JSON.stringify(
+      {
+        extends: '../temp/tsconfig.cocos.json',
+        include: ['../assets/**/*.ts'],
+      },
+      null,
+      2
+    ),
+    'utf-8'
+  );
+  // 用 npx -y -p typescript tsc：CocosCreator 工程默认不在 node_modules 装 typescript，
+  // 直接 npx tsc 会失败（"not the tsc command"），需显式指定 typescript 包让 npx 拉取
+  const result = spawnSync(
+    'npx',
+    ['-y', '-p', 'typescript', 'tsc', '--noEmit', '--project', verifyTsconfig],
+    {
+      cwd: projectPath,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: true,
+    }
+  );
   const combined = (result.stdout ?? '') + (result.stderr ?? '');
   return { errors: parseTscErrors(combined), raw: combined, ran: true };
 }
@@ -91,6 +119,58 @@ export function verifyMcpConnection(port = 3001): Promise<boolean> {
 /** 验证 CocosCreator preview server（默认 7456） */
 export function verifyPreviewUrl(port = 7456): Promise<boolean> {
   return httpOk(`http://localhost:${port}`);
+}
+
+/** POST JSON，返回解析后的对象（失败返回 null） */
+export function httpPostJson(
+  url: string,
+  body: unknown,
+  timeoutMs = 5000
+): Promise<Record<string, unknown> | null> {
+  return new Promise((resolve) => {
+    const data = Buffer.from(JSON.stringify(body));
+    const req = http.request(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': data.length },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        let chunks = '';
+        res.on('data', (c) => (chunks += c));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(chunks) as Record<string, unknown>);
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+    );
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(null);
+    });
+    req.write(data);
+    req.end();
+  });
+}
+
+/**
+ * 调 cocos-mcp server_information get_comprehensive_status，取真实 previewUrl
+ * preview 端口是动态的（多工程递增 7456/7457...），不能写死 7456
+ * @returns previewUrl（如 http://localhost:7456），失败返回 null
+ */
+export async function fetchPreviewUrl(mcpPort = 3001): Promise<string | null> {
+  const resp = await httpPostJson(`http://127.0.0.1:${mcpPort}/api/server/server_information`, {
+    action: 'get_comprehensive_status',
+  });
+  const result = (resp?.result ?? {}) as Record<string, unknown>;
+  const data = (result.data ?? {}) as Record<string, unknown>;
+  const previewUrl = data.previewUrl;
+  return typeof previewUrl === 'string' && previewUrl ? previewUrl : null;
 }
 
 // ==================== opencode 事件流监控 ====================

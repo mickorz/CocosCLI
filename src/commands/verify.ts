@@ -6,7 +6,8 @@ import { getCocosCreatorPath, openCocosProject } from '../utils/cocos.js';
 import {
   runTscCheck,
   verifyMcpConnection,
-  verifyPreviewUrl,
+  httpOk,
+  fetchPreviewUrl,
   runOpencodeMonitored,
   OpencodeResult,
 } from '../utils/verify.js';
@@ -90,43 +91,71 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
   }
   console.log(chalk.gray(`  CocosMCP ${mcpReady ? '已就绪' : '未就绪（超时，后续 MCP 验证可能失败）'}`));
 
-  // 第2步：tsc 编译检查
-  console.log(chalk.blue('\n第2步 脚本编译检查 tsc --noEmit'));
-  const tsc = runTscCheck(dir);
+  // 第2步：tsc 编译检查 + 自动修复循环（阶段2）
+  // 有 error 就调 opencode 修复，重跑 tsc，循环到无 error 或达到最大轮数
+  console.log(chalk.blue('\n第2步 脚本编译检查 tsc --noEmit（含自动修复循环，最多 3 轮）'));
+  let tsc = runTscCheck(dir);
   if (!tsc.ran) {
     console.log(chalk.gray('  无 tsconfig.json，跳过'));
     report.push('## 第2步 编译检查', '- 无 tsconfig.json，跳过', '');
-  } else if (tsc.errors.length === 0) {
-    console.log(chalk.green('  无 error'));
-    report.push('## 第2步 编译检查', '- 无 error', '');
   } else {
-    console.log(chalk.red(`  发现 ${tsc.errors.length} 个 error：`));
-    report.push('## 第2步 编译检查', `- 发现 ${tsc.errors.length} 个 error：`, '');
-    tsc.errors.forEach((e) => {
-      const line = `${e.file}(${e.line},${e.col}): ${e.code} ${e.message}`;
-      console.log(chalk.gray(`    ${line}`));
-      report.push(`- ${line}`);
-    });
-    report.push('');
+    let round = 0;
+    const maxRounds = 3;
+    while (tsc.errors.length > 0 && round < maxRounds) {
+      round++;
+      console.log(chalk.yellow(`\n  第 ${round} 轮：发现 ${tsc.errors.length} 个 error，调 opencode 修复`));
+      tsc.errors.forEach((e) =>
+        console.log(chalk.gray(`    ${e.file}(${e.line},${e.col}): ${e.code} ${e.message}`))
+      );
+      const errorList = tsc.errors
+        .map((e) => `${e.file}(${e.line},${e.col}): ${e.code} ${e.message}`)
+        .join('\n');
+      const fixPrompt = `请修复以下 TypeScript 编译 error，只做必要的最小修改，不要改无关代码：\n${errorList}`;
+      const fixResult = await runOpencodeMonitored(fixPrompt, dir, (st, info) => {
+        console.log(chalk.gray(`    [${st}] ${info}`.trim()));
+      });
+      if (fixResult.state !== 'SUCCEEDED') {
+        console.log(chalk.red('  opencode 修复未成功，停止循环'));
+        report.push('## 第2步 编译检查', `- 第 ${round} 轮 opencode 修复未成功`, '');
+        break;
+      }
+      console.log(chalk.gray('  修复完成，重跑 tsc 检查...'));
+      tsc = runTscCheck(dir);
+    }
+    if (tsc.errors.length === 0) {
+      const note = round > 0 ? `（经 ${round} 轮修复）` : '';
+      console.log(chalk.green(`  无 error${note}`));
+      report.push('## 第2步 编译检查', `- 无 error${note}`, '');
+    } else {
+      console.log(chalk.red(`  仍有 ${tsc.errors.length} 个 error（${round} 轮修复后）：`));
+      report.push('## 第2步 编译检查', `- 仍有 ${tsc.errors.length} 个 error（${round} 轮修复后）：`, '');
+      tsc.errors.forEach((e) => {
+        const line = `${e.file}(${e.line},${e.col}): ${e.code} ${e.message}`;
+        console.log(chalk.gray(`    ${line}`));
+        report.push(`- ${line}`);
+      });
+      report.push('');
+    }
   }
 
-  // 第3步：MCP + preview 验证
+  // 第3步：MCP + preview 验证（preview 用动态 previewUrl，调 cocos-mcp server_information 查真实地址）
   console.log(chalk.blue('\n第3步 验证 MCP 与 preview'));
   const mcpOk = await verifyMcpConnection();
-  const previewOk = await verifyPreviewUrl();
-  console.log(chalk.gray(`  MCP (127.0.0.1:3001/health)：${mcpOk ? '可访问' : '不可访问'}`));
-  console.log(chalk.gray(`  preview (localhost:7456)：${previewOk ? '可访问' : '不可访问'}`));
+  const previewUrl = await fetchPreviewUrl();
+  const previewOk = previewUrl ? await httpOk(previewUrl) : false;
+  console.log(chalk.gray(`  MCP (3001/health)：${mcpOk ? '可访问' : '不可访问'}`));
+  console.log(chalk.gray(`  preview (${previewUrl || '未获取到'})：${previewOk ? '可访问' : '不可访问'}`));
   report.push(
     '## 第3步 MCP 与 preview 验证',
     `- MCP (3001/health)：${mcpOk ? '可访问' : '不可访问'}`,
-    `- preview (7456)：${previewOk ? '可访问' : '不可访问'}`,
+    `- preview (${previewUrl || '未获取到'})：${previewOk ? '可访问' : '不可访问'}`,
     ''
   );
 
   // 第4步：opencode 预览场景（事件流监控）
   console.log(chalk.blue('\n第4步 opencode 预览场景（事件流监控）'));
-  // prompt 必须明确点名 skill，否则 glm-5.2 不会主动调用 cocos-preview-scene，会退化为用基础工具摸索
-  const prompt = `请使用 cocos-preview-scene skill 预览 ${scene} 场景`;
+  // prompt 用 /skill 参数 斜杠命令式（比自然语言更稳地命中 cocos-preview-scene skill）
+  const prompt = `/cocos-preview-scene ${scene}`;
   console.log(chalk.gray(`  prompt：${prompt}`));
   const result: OpencodeResult = await runOpencodeMonitored(prompt, dir, (st, info) => {
     const line = info ? `[${st}] ${info}` : `[${st}]`;
