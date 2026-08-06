@@ -207,7 +207,11 @@ export async function runScriptDiagnosticsViaMcp(
   }
   const result = (resp.result ?? {}) as Record<string, unknown>;
   const data = (result.data ?? {}) as Record<string, unknown>;
-  const diagnostics = (data.diagnostics ?? []) as ScriptDiagnostic[];
+  // 检查 diagnostics 是数组（工具不存在/响应异常时没有，如 "Unknown tool"）
+  if (!Array.isArray(data.diagnostics)) {
+    return { errors: [], ran: false };
+  }
+  const diagnostics = data.diagnostics as ScriptDiagnostic[];
   return { errors: diagnostics, ran: true };
 }
 
