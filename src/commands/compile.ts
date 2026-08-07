@@ -4,6 +4,19 @@ import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
 import { runScriptDiagnosticsViaMcp, readMcpPort, verifyMcpConnection } from '../utils/verify.js';
 
+/** 读文件指定行附近的代码片段（error 上下文，方便定位） */
+function readSnippet(filePath: string, line: number, contextLines = 1): string {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split(/\r?\n/);
+    const start = Math.max(0, line - 1 - contextLines);
+    const end = Math.min(lines.length, line + contextLines);
+    return lines.slice(start, end).join('\n');
+  } catch {
+    return '';
+  }
+}
+
 // compile 命令：调 cocos-mcp run_script_diagnostics 做编译检查，生成 log
 //
 // 复用 verify 第2步的 runScriptDiagnosticsViaMcp（编辑器内置 tsc + skipLibCheck）
@@ -66,33 +79,34 @@ export async function compile(projectDir?: string): Promise<void> {
   }
   console.log(chalk.gray('[检查4] run_script_diagnostics 可用\n'));
 
-  // 写 log 文件
+  // 写 log 文件（JSON 格式 + 文件名带时间戳，方便 jq 等工具筛选查询）
   const logDir = path.join(dir, '.cocoscli');
   fs.mkdirSync(logDir, { recursive: true });
-  const logPath = path.join(logDir, 'compile-log.txt');
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const logPath = path.join(logDir, `compile-log-${ts}.json`);
 
-  const lines: string[] = [
-    'cocoscli compile 编译检查报告',
-    `工程：${dir}`,
-    `时间：${new Date().toISOString()}`,
-    `MCP 端口：${mcpPort}`,
-    '',
-  ];
+  const logData = {
+    command: 'cocoscli compile',
+    project: dir,
+    timestamp: new Date().toISOString(),
+    mcpPort,
+    ok: diag.errors.length === 0,
+    errorCount: diag.errors.length,
+    errors: diag.errors.map((e) => ({
+      ...e,
+      snippet: readSnippet(path.join(dir, e.file), e.line),
+    })),
+  };
 
   if (diag.errors.length === 0) {
     console.log(chalk.green('无 error'));
-    lines.push('结果：无 error');
   } else {
     console.log(chalk.red(`发现 ${diag.errors.length} 个 error：`));
-    lines.push(`结果：${diag.errors.length} 个 error：`);
-    lines.push('');
     diag.errors.forEach((e) => {
-      const line = `${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`;
-      console.log(chalk.gray(`  ${line}`));
-      lines.push(line);
+      console.log(chalk.gray(`  ${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`));
     });
   }
 
-  fs.writeFileSync(logPath, lines.join('\n') + '\n', 'utf-8');
+  fs.writeFileSync(logPath, JSON.stringify(logData, null, 2) + '\n', 'utf-8');
   console.log(chalk.green(`\n编译报告已写入：${logPath}`));
 }
