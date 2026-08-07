@@ -19,6 +19,7 @@ import { close } from './commands/close.js';
 import { remove } from './commands/remove.js';
 import { build } from './commands/build.js';
 import { verify } from './commands/verify.js';
+import { compile } from './commands/compile.js';
 
 const program = new Command();
 
@@ -62,6 +63,12 @@ program
   .command('verify <scene> [dir]')
   .description('验证工程：tsc 编译检查 + MCP/preview 连通性 + opencode 预览指定场景，事件流监控')
   .action(async (scene: string, dir?: string) => verify(dir, scene));
+
+// compile：编译检查（cocos-mcp run_script_diagnostics），生成编译报告 log
+program
+  .command('compile [dir]')
+  .description('编译检查（cocos-mcp run_script_diagnostics），生成编译报告到 .cocoscli/compile-log.txt')
+  .action(async (dir?: string) => compile(dir));
 
 // 无参数时显示帮助
 if (process.argv.length === 2) {
