@@ -16,7 +16,7 @@ import { cloneCocosMcp, buildCocosMcp, writeDefaultMcpServerConfig, writeOpencod
  *   6. 写入默认 opencode.json 到工程根（放开 external_directory 权限，供 verify 使用）
  *   7. 打开工程（复用 open 的核心函数）
  */
-export function init(noLogin = true): void {
+export function init(port = 3001, noLogin = true): void {
   const cwd = process.cwd();
 
   // 第一步：定位 CocosCreator
@@ -64,7 +64,7 @@ export function init(noLogin = true): void {
   // 第五步：写入默认 mcp-server.json（CocosMCP 服务器配置，已存在则跳过）
   const configSpinner = createSpinner('配置默认 mcp-server.json...').start();
   try {
-    const cfg = writeDefaultMcpServerConfig(cwd);
+    const cfg = writeDefaultMcpServerConfig(cwd, port);
     spinnerSucceed(configSpinner, cfg === 'exists' ? 'mcp-server.json 已存在，跳过' : '默认 mcp-server.json 已写入 settings/');
   } catch (e) {
     spinnerFail(configSpinner, '写入 mcp-server.json 失败');

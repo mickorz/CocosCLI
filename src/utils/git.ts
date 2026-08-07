@@ -90,14 +90,14 @@ export const TOOL_MANAGER_FILE = 'tool-manager.json';
  *
  * @returns written 已写入 / exists 已存在跳过
  */
-export function writeDefaultMcpServerConfig(projectPath: string): 'written' | 'exists' {
+export function writeDefaultMcpServerConfig(projectPath: string, port = 3001): 'written' | 'exists' {
   const settingsDir = path.join(projectPath, 'settings');
   const filePath = path.join(settingsDir, MCP_SERVER_FILE);
   fs.mkdirSync(settingsDir, { recursive: true });
   if (fs.existsSync(filePath)) {
     return 'exists';
   }
-  fs.writeFileSync(filePath, JSON.stringify(DEFAULT_MCP_SERVER_CONFIG, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(filePath, JSON.stringify({ ...DEFAULT_MCP_SERVER_CONFIG, port }, null, 2) + '\n', 'utf-8');
   return 'written';
 }
 

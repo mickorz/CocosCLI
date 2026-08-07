@@ -32,7 +32,8 @@ program
 program
   .command('init')
   .description('为当前 Cocos 工程安装 CocosMCP 扩展并打开（默认免登录）')
-  .action(() => init());
+  .option('-p, --port <port>', 'CocosMCP 端口（默认 3001，多工程时错开如 3002）', '3001')
+  .action((options) => init(parseInt(options.port, 10)));
 
 // open：用 CocosCreator 打开工程，dir 省略时为当前目录
 program
