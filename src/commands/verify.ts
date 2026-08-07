@@ -84,7 +84,7 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
   }
 
   // 轮询 CocosMCP health 直到就绪（替代固定 sleep，CocosCreator 启动慢时等够）
-  console.log(chalk.gray('  等待 CocosMCP 就绪（轮询 3001/health，最多 90 秒）...'));
+  console.log(chalk.gray(`  等待 CocosMCP 就绪（轮询 ${mcpPort}/health，最多 90 秒）...`));
   let mcpReady = false;
   for (let i = 0; i < 18; i++) {
     if (await verifyMcpConnection(mcpPort)) {
@@ -97,6 +97,7 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
 
   // 第2步：编译检查 + 自动修复循环（调 cocos-mcp run_script_diagnostics，用编辑器内置 tsc）
   console.log(chalk.blue('\n第2步 编译检查（cocos-mcp run_script_diagnostics，含自动修复循环，最多 3 轮）'));
+  console.log(chalk.gray('  正在编译检查（编辑器 tsc，大工程可能几十秒）...'));
   let diag = await runScriptDiagnosticsViaMcp(mcpPort);
   if (!diag.ran) {
     console.log(chalk.gray('  cocos-mcp run_script_diagnostics 不可用，跳过'));
