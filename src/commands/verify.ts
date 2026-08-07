@@ -144,7 +144,17 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
   console.log(chalk.blue('\n第3步 验证 MCP 与 preview'));
   const mcpOk = await verifyMcpConnection();
   const previewUrl = await fetchPreviewUrl(mcpPort);
-  const previewOk = previewUrl ? await httpOk(previewUrl) : false;
+  let previewOk = false;
+  if (previewUrl) {
+    // 轮询 preview server：MCP 就绪时 preview server 可能还没起（延迟启动），等它就绪
+    for (let i = 0; i < 10; i++) {
+      if (await httpOk(previewUrl)) {
+        previewOk = true;
+        break;
+      }
+      await sleep(3000);
+    }
+  }
   console.log(chalk.gray(`  MCP (3001/health)：${mcpOk ? '可访问' : '不可访问'}`));
   console.log(chalk.gray(`  preview (${previewUrl || '未获取到'})：${previewOk ? '可访问' : '不可访问'}`));
   report.push(
