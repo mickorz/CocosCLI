@@ -13,6 +13,7 @@ import {
   OpencodeResult,
 } from '../utils/verify.js';
 import { findCocosProcesses, isProjectMatch } from '../utils/process.js';
+import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
 
 // verify 命令：编排四步验证
 //
@@ -105,6 +106,17 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
     const maxRounds = 3;
     while (diag.errors.length > 0 && round < maxRounds) {
       round++;
+      // 留存本轮编译 log（JSON + snippet，追溯修复过程）
+      writeCompileLog(dir, `verify-compile-round-${round}-`, {
+        source: 'verify',
+        round,
+        timestamp: new Date().toISOString(),
+        errorCount: diag.errors.length,
+        errors: diag.errors.map((e) => ({
+          ...e,
+          snippet: readSnippet(path.join(dir, e.file), e.line),
+        })),
+      });
       console.log(chalk.yellow(`\n  第 ${round} 轮：发现 ${diag.errors.length} 个 error，调 opencode 修复`));
       diag.errors.forEach((e) =>
         console.log(chalk.gray(`    ${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`))
@@ -124,6 +136,17 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
       console.log(chalk.gray('  修复完成，重跑编译检查...'));
       diag = await runScriptDiagnosticsViaMcp(mcpPort);
     }
+    // 留存最终编译 log
+    writeCompileLog(dir, 'verify-compile-final-', {
+      source: 'verify',
+      round: 'final',
+      timestamp: new Date().toISOString(),
+      errorCount: diag.errors.length,
+      errors: diag.errors.map((e) => ({
+        ...e,
+        snippet: readSnippet(path.join(dir, e.file), e.line),
+      })),
+    });
     if (diag.errors.length === 0) {
       const note = round > 0 ? `（经 ${round} 轮修复）` : '';
       console.log(chalk.green(`  无 error${note}`));

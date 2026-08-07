@@ -3,19 +3,7 @@ import * as path from 'path';
 import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
 import { runScriptDiagnosticsViaMcp, readMcpPort, verifyMcpConnection } from '../utils/verify.js';
-
-/** 读文件指定行附近的代码片段（error 上下文，方便定位） */
-function readSnippet(filePath: string, line: number, contextLines = 1): string {
-  try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split(/\r?\n/);
-    const start = Math.max(0, line - 1 - contextLines);
-    const end = Math.min(lines.length, line + contextLines);
-    return lines.slice(start, end).join('\n');
-  } catch {
-    return '';
-  }
-}
+import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
 
 // compile 命令：调 cocos-mcp run_script_diagnostics 做编译检查，生成 log
 //
@@ -79,12 +67,7 @@ export async function compile(projectDir?: string): Promise<void> {
   }
   console.log(chalk.gray('[检查4] run_script_diagnostics 可用\n'));
 
-  // 写 log 文件（JSON 格式 + 文件名带时间戳，方便 jq 等工具筛选查询）
-  const logDir = path.join(dir, '.cocoscli');
-  fs.mkdirSync(logDir, { recursive: true });
-  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const logPath = path.join(logDir, `compile-log-${ts}.json`);
-
+  // 写 log 文件（JSON 格式 + 时间戳 + snippet，通过共用 writeCompileLog）
   const logData = {
     command: 'cocoscli compile',
     project: dir,
@@ -107,6 +90,6 @@ export async function compile(projectDir?: string): Promise<void> {
     });
   }
 
-  fs.writeFileSync(logPath, JSON.stringify(logData, null, 2) + '\n', 'utf-8');
+  const logPath = writeCompileLog(dir, 'compile-log-', logData);
   console.log(chalk.green(`\n编译报告已写入：${logPath}`));
 }
