@@ -233,6 +233,21 @@ export function readMcpPort(projectPath: string): number {
   return 3001;
 }
 
+/**
+ * 检查 opencode 是否在 PATH（verify 第4步依赖，提前检查避免白跑 1-3 步）
+ */
+export function isOpencodeAvailable(): boolean {
+  try {
+    const result = spawnSync('opencode', ['--version'], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+      shell: true,
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
 // ==================== opencode 事件流监控 ====================
 
 /** opencode 任务状态 */

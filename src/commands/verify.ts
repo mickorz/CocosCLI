@@ -9,6 +9,7 @@ import {
   httpOk,
   fetchPreviewUrl,
   readMcpPort,
+  isOpencodeAvailable,
   runOpencodeMonitored,
   OpencodeResult,
 } from '../utils/verify.js';
@@ -45,6 +46,13 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
   if (!isCocosProject(dir)) {
     console.log(chalk.red(`目标目录不是 Cocos 3.x 工程：${dir}`));
     console.log(chalk.gray('Cocos 工程根目录应同时包含 assets/ 与 settings/'));
+    process.exit(1);
+  }
+
+  // 前置检查：opencode 是否可用（第4步依赖，提前检查避免白跑 1-3 步）
+  if (!isOpencodeAvailable()) {
+    console.log(chalk.red('opencode 未找到（不在 PATH）'));
+    console.log(chalk.gray('  安装：npm install -g opencode'));
     process.exit(1);
   }
 
