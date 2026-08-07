@@ -9,7 +9,7 @@ import {
   httpOk,
   fetchPreviewUrl,
   readMcpPort,
-  isOpencodeAvailable,
+  resolveOpencodePath,
   runOpencodeMonitored,
   OpencodeResult,
 } from '../utils/verify.js';
@@ -49,12 +49,15 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
     process.exit(1);
   }
 
-  // 前置检查：opencode 是否可用（第4步依赖，提前检查避免白跑 1-3 步）
-  if (!isOpencodeAvailable()) {
-    console.log(chalk.red('opencode 未找到（不在 PATH）'));
+  // 前置检查：opencode 是否可用（先 PATH，找不到查 npm 全局 prefix）
+  const opencodePath = resolveOpencodePath();
+  if (!opencodePath) {
+    console.log(chalk.red('opencode 未找到（不在 PATH，npm 全局也没找到）'));
     console.log(chalk.gray('  安装：npm install -g opencode'));
+    console.log(chalk.gray('  或确认 npm 全局 bin 目录在 PATH'));
     process.exit(1);
   }
+  console.log(chalk.gray(`opencode：${opencodePath}`));
 
   const mcpPort = readMcpPort(dir);
   console.log(chalk.cyan(`开始 verify ${dir}`));

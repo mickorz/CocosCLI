@@ -233,19 +233,57 @@ export function readMcpPort(projectPath: string): number {
   return 3001;
 }
 
+let _opencodePath: string | null | undefined;
+
 /**
- * 检查 opencode 是否在 PATH（verify 第4步依赖，提前检查避免白跑 1-3 步）
+ * 找 opencode 可执行文件路径（带缓存）：
+ * 1. 先试 PATH（spawnSync opencode --version）
+ * 2. PATH 找不到 → 查 npm 全局 prefix（npm prefix -g）下的 opencode.cmd / opencode
+ * @returns opencode 路径（PATH 可用时返回 'opencode'），找不到返回 null
  */
-export function isOpencodeAvailable(): boolean {
+export function resolveOpencodePath(): string | null {
+  if (_opencodePath !== undefined) return _opencodePath;
+
+  // 方法1：PATH
   try {
     const result = spawnSync('opencode', ['--version'], {
       stdio: ['ignore', 'ignore', 'ignore'],
       shell: true,
     });
-    return result.status === 0;
+    if (result.status === 0) {
+      _opencodePath = 'opencode';
+      return _opencodePath;
+    }
   } catch {
-    return false;
+    // PATH 不可用
   }
+
+  // 方法2：npm 全局 prefix（应对 PATH 没配好但 npm 全局装了的情况）
+  try {
+    const prefixResult = spawnSync('npm', ['prefix', '-g'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      shell: true,
+    });
+    const prefix = (prefixResult.stdout || '').trim();
+    if (prefix) {
+      const isWin = process.platform === 'win32';
+      const candidates = isWin
+        ? [path.join(prefix, 'opencode.cmd'), path.join(prefix, 'opencode.exe')]
+        : [path.join(prefix, 'opencode')];
+      for (const c of candidates) {
+        if (fs.existsSync(c)) {
+          _opencodePath = c;
+          return _opencodePath;
+        }
+      }
+    }
+  } catch {
+    // npm 不可用
+  }
+
+  _opencodePath = null;
+  return _opencodePath;
 }
 
 // ==================== opencode 事件流监控 ====================
@@ -329,8 +367,19 @@ export function runOpencodeMonitored(
   onProgress?: (state: OpencodeState, info: string) => void
 ): Promise<OpencodeResult> {
   return new Promise((resolve) => {
+    const opencodePath = resolveOpencodePath();
+    if (!opencodePath) {
+      resolve({
+        state: 'FAILED',
+        exitCode: -1,
+        toolsCalled: [],
+        todos: [],
+        error: 'opencode 未找到（不在 PATH，npm 全局也没找到）',
+      });
+      return;
+    }
     const child = spawn(
-      'opencode',
+      opencodePath,
       ['run', '--format', 'json', '--title', 'cocoscli-verify', prompt],
       // env 必须带 PWD：opencode.exe 靠 PWD 环境变量定位项目根并加载 .opencode/skills，
       // Windows 的 cmd / Node spawn 默认不设 PWD，不带则项目 skill 加载不到
