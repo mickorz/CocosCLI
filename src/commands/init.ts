@@ -39,7 +39,10 @@ export function init(noLogin = true): void {
   const spinner = createSpinner('克隆 CocosMCP 扩展...').start();
   try {
     const result = cloneCocosMcp(cwd);
-    spinnerSucceed(spinner, result.status === 'exists' ? 'CocosMCP 已存在，跳过克隆' : 'CocosMCP 克隆完成');
+    const msg = result.status === 'cloned' ? 'CocosMCP 克隆完成'
+      : result.status === 'updated' ? 'CocosMCP 已更新（git pull 拉最新）'
+      : 'CocosMCP 已存在（git pull 失败，保持现状）';
+    spinnerSucceed(spinner, msg);
   } catch (e) {
     spinnerFail(spinner, '克隆 CocosMCP 失败');
     console.log(chalk.red(e instanceof Error ? e.message : String(e)));

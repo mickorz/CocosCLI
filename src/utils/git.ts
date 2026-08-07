@@ -20,7 +20,7 @@ export const COCOS_MCP_DIR = 'CocosMCP';
 
 /** 安装结果 */
 export interface CloneResult {
-  status: 'cloned' | 'exists';
+  status: 'cloned' | 'exists' | 'updated';
 }
 
 /**
@@ -37,7 +37,14 @@ export function cloneCocosMcp(projectPath: string): CloneResult {
   fs.mkdirSync(extensionsDir, { recursive: true });
 
   if (fs.existsSync(targetDir)) {
-    return { status: 'exists' };
+    // 已存在 → git pull 更新（拉最新 CocosMCP，含新工具如 run_script_diagnostics）
+    try {
+      execSync('git pull', { cwd: targetDir, stdio: ['ignore', 'pipe', 'pipe'] });
+      return { status: 'updated' };
+    } catch {
+      // git pull 失败（本地改动冲突等），保持现状
+      return { status: 'exists' };
+    }
   }
 
   execSync(`git clone ${COCOS_MCP_URL} "${targetDir}"`, {
