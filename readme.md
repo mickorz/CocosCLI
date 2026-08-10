@@ -1,6 +1,8 @@
 # cocoscli
 
+由于官方cocoscli只有cocos creator4以上的版本，旧的3.7项目不支持，所以开发了此项目。方便用于agent封装。
 面向 Cocos Creator 3.7.x 的轻量命令行工具，提供工程初始化扩展、打开工程、关闭进程三个命令。open 与 init **默认免登录**（启动编辑器时自动追加 `--nologin`）。
+
 
 ## 功能
 

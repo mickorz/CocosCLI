@@ -120,19 +120,54 @@ export async function browserLogs(
 
   // ===== 确定 page =====
 
-  // 优先用用户指定的 page；否则拿 previewUrl 的 host（如 localhost）做子串匹配
+  // 优先用用户指定的 page；否则 cdp-cli tabs 找预览页（找不到中断提示先跑 previewscene）
   let page = options.page ?? '';
   if (!page) {
-    console.log(chalk.gray('\n获取预览地址（定位 CDP 页面）...'));
+    // 拿 previewUrl 的 host:port（匹配 tabs 里的 url）
+    console.log(chalk.gray('\n获取预览地址...'));
     const previewUrl = await fetchPreviewUrl(mcpPort);
-    if (previewUrl) {
-      // 从 previewUrl 提取 host:port（如 localhost:7456）
-      const match = previewUrl.match(/\/\/([^/]+)/);
-      page = match ? match[1] : 'localhost';
-    } else {
-      page = 'localhost';
+    const previewHost = previewUrl ? (previewUrl.match(/\/\/([^/]+)/)?.[1] ?? '') : '';
+
+    // cdp-cli tabs 列出所有 CDP Chrome 页面
+    const tabsResult = spawnSync('cdp-cli', ['tabs'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      shell: true,
+      timeout: 5000,
+    });
+    const tabLines = (tabsResult.stdout || '')
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+    const tabs = tabLines
+      .map((l) => {
+        try {
+          return JSON.parse(l) as { id: string; title: string; url: string };
+        } catch {
+          return null;
+        }
+      })
+      .filter((t): t is { id: string; title: string; url: string } => t !== null);
+
+    // 找预览页：url 含 previewHost，或 title 含 Cocos Creator
+    const previewPage = tabs.find(
+      (t) =>
+        (previewHost && t.url && t.url.includes(previewHost)) ||
+        (t.title && t.title.toLowerCase().includes('cocos'))
+    );
+
+    if (!previewPage) {
+      console.log(chalk.red('未找到 CocosCreator 预览页面'));
+      console.log(chalk.gray('  请先运行：cocoscli previewscene <场景>'));
+      console.log(chalk.gray('  browserlogs 需配合 previewscene 使用（预览页在 CDP Chrome 打开后才能读日志）'));
+      if (tabs.length > 0) {
+        console.log(chalk.gray(`  当前 CDP 页面：${tabs.map((t) => t.title).join(', ')}`));
+      }
+      process.exit(1);
     }
-    console.log(chalk.gray(`CDP 页面匹配：${page}`));
+
+    page = previewPage.id;
+    console.log(chalk.gray(`找到预览页：${previewPage.title}（${page}）`));
   }
 
   // ===== 构建 cdp-cli console 参数 =====
