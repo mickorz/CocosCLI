@@ -1,0 +1,8 @@
+[submodule "deps/CocosMCP"]
+	path = deps/CocosMCP
+	url = https://github.com/mickorz/CocosMCP.git
+	branch = master
+[submodule "deps/cdp-cli"]
+	path = deps/cdp-cli
+	url = https://github.com/mickorz/cdp-cli.git
+	branch = main
