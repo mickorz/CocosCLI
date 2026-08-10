@@ -16,7 +16,11 @@ const root = process.cwd()
 
 function run(args, cwd) {
   console.log(`\n> npm ${args.join(' ')}`)
-  execSync(`npm ${args.join(' ')}`, { cwd, stdio: 'inherit' })
+  execSync(`npm ${args.join(' ')}`, {
+    cwd,
+    stdio: 'inherit',
+    env: { ...process.env, NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=DEP0190'].filter(Boolean).join(' ') },
+  })
 }
 
 // ------------------------

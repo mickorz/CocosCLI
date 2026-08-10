@@ -25,7 +25,11 @@ import process from 'node:process'
 const root = process.cwd()
 function run(args, cwd) {
   console.log(`\n> npm ${args.join(' ')}`)
-  execSync(`npm ${args.join(' ')}`, { cwd, stdio: 'inherit' })
+  execSync(`npm ${args.join(' ')}`, {
+    cwd,
+    stdio: 'inherit',
+    env: { ...process.env, NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=DEP0190'].filter(Boolean).join(' ') },
+  })
 }
 
 /** 构造排除过滤器：跳过指定顶层目录（.git / node_modules / dist 等） */
