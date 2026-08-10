@@ -8,7 +8,7 @@ import process from 'node:process'
 // 流程：
 //   前置：deps/ 存在（clone 时 --recurse-submodules，或 git submodule update --init）
 //     ├─> deps/CocosMCP：npm install + npm run build（生成 dist，CocosCreator 加载需要）
-//     └─> deps/cdp-cli：npm install + npm run build + npm link（全局可调 cdp-cli）
+//     └─> deps/cdp-cli：npm install + npm run build（cdp-cli 命令由 cocoscli bin wrapper）
 //
 // 用法：npm run setup
 
@@ -43,9 +43,8 @@ console.log('\n[setup] cdp-cli')
 
 run(['install'], cdpCli)
 run(['run', 'build'], cdpCli)
-run(['link'], cdpCli)
 
-console.log('\n[完成] cdp-cli 已全局 link')
+console.log('\n[完成] cdp-cli 已构建（cdp-cli 命令由 cocoscli bin wrapper 提供）')
 
 // ------------------------
 // CocosMCP
