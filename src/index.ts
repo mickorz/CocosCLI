@@ -21,6 +21,7 @@ import { build } from './commands/build.js';
 import { verify } from './commands/verify.js';
 import { compile } from './commands/compile.js';
 import { previewScene } from './commands/preview-scene.js';
+import { browserLogs } from './commands/browser-logs.js';
 
 const program = new Command();
 
@@ -77,6 +78,20 @@ program
   .command('previewscene <scene> [dir]')
   .description('切换场景并获取预览地址（CocosMCP），在浏览器打开预览')
   .action(async (scene: string, dir?: string) => previewScene(scene, dir));
+
+// browserlogs：读取 CDP Chrome 中预览页的控制台日志（cdp-cli console）
+program
+  .command('browserlogs [dir]')
+  .description('读取浏览器控制台日志（cdp-cli console），支持 --type/--tail/--duration/--all/--grep')
+  .option('--type <type>', '日志级别过滤（error/warn/info/log/debug）')
+  .option('--tail <n>', '只看最后 N 条', (v: string) => parseInt(v, 10))
+  .option('--duration <s>', '收集时长（秒）', (v: string) => parseInt(v, 10))
+  .option('--all', '显示全部日志（不限条数）')
+  .option('--grep <keyword>', '关键词过滤（不区分大小写）')
+  .option('--page <page>', 'CDP 页面匹配（title/id 子串，默认自动匹配预览页）')
+  .action(async (dir: string | undefined, options: Record<string, unknown>) => {
+    await browserLogs(dir, options as Parameters<typeof browserLogs>[1]);
+  });
 
 // 无参数时显示帮助
 if (process.argv.length === 2) {
