@@ -1,62 +1,18 @@
 import { execSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
 import process from 'node:process'
 
-// setup-deps：初始化 CocosCLI 的所有 submodule 依赖
+// setup：开发态初始化依赖（= build:deps + 提示 npm link cocoscli）
+// cdp-cli 命令由 cocoscli 的 bin wrapper 提供（npm link cocoscli 后自动有 cdp-cli）
 //
 // 流程：
-//   前置：deps/ 存在（clone 时 --recurse-submodules，或 git submodule update --init）
-//     ├─> deps/CocosMCP：npm install + npm run build（生成 dist，CocosCreator 加载需要）
-//     └─> deps/cdp-cli：npm install + npm run build（cdp-cli 命令由 cocoscli bin wrapper）
+//   build:deps（install + build cdp-cli + CocosMCP，复用 build-deps.mjs）
+//     ↓
+//   提示 npm link cocoscli → 得到 cocoscli 与 cdp-cli 全局命令
 //
 // 用法：npm run setup
 
-const root = process.cwd()
+// 复用 build-deps 的 install + build 逻辑（含 package.json 检查、DEP0190 抑制）
+execSync('node scripts/build-deps.mjs', { stdio: 'inherit', cwd: process.cwd() })
 
-function run(args, cwd) {
-  console.log(`\n> npm ${args.join(' ')}`)
-  execSync(`npm ${args.join(' ')}`, {
-    cwd,
-    stdio: 'inherit',
-    env: { ...process.env, NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=DEP0190'].filter(Boolean).join(' ') },
-  })
-}
-
-// ------------------------
-// 前置：submodule 已初始化
-// ------------------------
-
-const depsDir = resolve(root, 'deps')
-if (!existsSync(depsDir)) {
-  console.error('[失败] deps/ 不存在，请先执行：git submodule update --init --recursive')
-  process.exit(1)
-}
-
-// ------------------------
-// cdp-cli
-// ------------------------
-
-const cdpCli = resolve(root, 'deps/cdp-cli')
-
-console.log('\n[setup] cdp-cli')
-
-run(['install'], cdpCli)
-run(['run', 'build'], cdpCli)
-
-console.log('\n[完成] cdp-cli 已构建（cdp-cli 命令由 cocoscli bin wrapper 提供）')
-
-// ------------------------
-// CocosMCP
-// ------------------------
-
-const cocosMcp = resolve(root, 'deps/CocosMCP')
-
-console.log('\n[setup] CocosMCP')
-
-run(['install'], cocosMcp)
-run(['run', 'build'], cocosMcp)
-
-console.log('\n[完成] CocosMCP 已就绪')
-
-console.log('\n所有依赖初始化完成.')
+console.log('\n[完成] 依赖已构建')
+console.log('开发态执行 npm link 得到 cocoscli 与 cdp-cli 命令')
