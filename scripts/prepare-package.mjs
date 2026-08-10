@@ -79,9 +79,9 @@ if (!existsSync(cdpCliSrc)) {
   process.exit(1)
 }
 
-const cdpCliDist = resolve(cdpCliSrc, 'dist', 'index.js')
+const cdpCliDist = resolve(cdpCliSrc, 'build', 'index.js')
 if (!existsSync(cdpCliDist)) {
-  console.error('[失败] deps/cdp-cli/dist/index.js 不存在，请先 npm run setup')
+  console.error('[失败] deps/cdp-cli/build/index.js 不存在，请先 npm run setup')
   process.exit(1)
 }
 
