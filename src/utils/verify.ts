@@ -293,6 +293,42 @@ export function resolveOpencodePath(): string | null {
   return _opencodePath;
 }
 
+// ==================== 场景管理 ====================
+
+/** 场景列表项 */
+export interface SceneInfo {
+  name: string;
+  path: string;
+  uuid: string;
+}
+
+/**
+ * 调 cocos-mcp scene_management get_list，返回场景列表
+ */
+export async function sceneManagementGetList(mcpPort: number): Promise<SceneInfo[]> {
+  const resp = await httpPostJson(
+    `http://127.0.0.1:${mcpPort}/api/scene/scene_management`,
+    { action: 'get_list' },
+    10000
+  );
+  const result = (resp?.result ?? {}) as Record<string, unknown>;
+  const data = result.data;
+  return Array.isArray(data) ? (data as SceneInfo[]) : [];
+}
+
+/**
+ * 调 cocos-mcp scene_management open，切换到指定场景
+ * @returns true 切换成功
+ */
+export async function sceneManagementOpen(mcpPort: number, scenePath: string): Promise<boolean> {
+  const resp = await httpPostJson(
+    `http://127.0.0.1:${mcpPort}/api/scene/scene_management`,
+    { action: 'open', scenePath },
+    30000
+  );
+  return resp?.success === true;
+}
+
 // ==================== opencode 事件流监控 ====================
 
 /** opencode 任务状态 */

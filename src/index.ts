@@ -20,6 +20,7 @@ import { remove } from './commands/remove.js';
 import { build } from './commands/build.js';
 import { verify } from './commands/verify.js';
 import { compile } from './commands/compile.js';
+import { previewScene } from './commands/preview-scene.js';
 
 const program = new Command();
 
@@ -70,6 +71,12 @@ program
   .command('compile [dir]')
   .description('编译检查（cocos-mcp run_script_diagnostics），生成编译报告到 .cocoscli/compile-log.txt')
   .action(async (dir?: string) => compile(dir));
+
+// previewscene：切换场景并获取预览地址（CocosMCP scene_management + server_information）
+program
+  .command('previewscene <scene> [dir]')
+  .description('切换场景并获取预览地址（CocosMCP），在浏览器打开预览')
+  .action(async (scene: string, dir?: string) => previewScene(scene, dir));
 
 // 无参数时显示帮助
 if (process.argv.length === 2) {
