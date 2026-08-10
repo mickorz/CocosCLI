@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process'
 import { cpSync, existsSync, rmSync, mkdirSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, basename } from 'node:path'
 import process from 'node:process'
 
 // prepare-package：把 submodule 依赖打包进 vendor/，供 npm publish 发布
@@ -8,13 +8,13 @@ import process from 'node:process'
 // 流程：
 //   deps/CocosMCP → vendor/CocosMCP（copy 源码，排除 .git/node_modules/dist
 //                   init 时 buildCocosMcp 会在目标工程 npm install + build）
-//   deps/cdp-cli  → vendor/cdp-cli（copy 全部，排除 .git/node_modules
-//                   保留 dist + package.json，再 npm install --production 装运行时依赖）
+//   deps/cdp-cli  → vendor/cdp-cli（copy build + package.json，排除 .git/node_modules
+//                   运行时依赖 ws/yargs 由根 package.json dependencies 承担）
 //
 // 发布包结构：
 //   dist/             CLI 编译产物
 //   vendor/CocosMCP   init 拷贝源（init 时 build）
-//   vendor/cdp-cli    cdp-cli 入口（dist/index.js）+ 运行时依赖
+//   vendor/cdp-cli    cdp-cli 入口（build/index.js，运行时依赖由根承担）
 //
 // 调用链：
 //   npm run prepare-package → 生成 vendor/
@@ -32,12 +32,14 @@ function run(args, cwd) {
   })
 }
 
-/** 构造排除过滤器：跳过指定顶层目录（.git / node_modules / dist 等） */
+/** 构造排除过滤器：跳过指定顶层目录（.git / node_modules / dist 等）与 .gitignore
+ *  避免 vendor 子目录的 .gitignore 让 npm pack 忽略 build 等产物 */
 function excludeDirs(base, dirs) {
+  const pattern = new RegExp(`^(${dirs.join('|')})([\\\\/]|$)`)
   return (source) => {
     const rel = source.slice(base.length).replace(/^[\\/]/, '')
     if (!rel) return true // 根目录本身，保留
-    const pattern = new RegExp(`^(${dirs.join('|')})([\\\\/]|$)`)
+    if (basename(rel) === '.gitignore') return false // 排除 .gitignore，避免 npm pack 忽略 build
     return !pattern.test(rel)
   }
 }
@@ -88,15 +90,13 @@ if (!existsSync(cdpCliDist)) {
 }
 
 console.log('\n[prepare] cdp-cli → vendor/cdp-cli')
-// 排除 .git / node_modules（运行时依赖在 vendor 里 npm install --production 装）
+// 排除 .git / node_modules（运行时依赖 ws/yargs 由根 package.json dependencies 承担，
+// Node 模块解析沿父目录找 node_modules，发布包不需 vendor/cdp-cli/node_modules）
 cpSync(cdpCliSrc, cdpCliDst, {
   recursive: true,
   filter: excludeDirs(cdpCliSrc, ['.git', 'node_modules']),
 })
-
-console.log('\n[prepare] vendor/cdp-cli 安装运行时依赖')
-run(['install', '--production', '--no-fund', '--no-audit'], cdpCliDst)
-console.log('[完成] vendor/cdp-cli 就绪（含 dist + 运行时依赖）')
+console.log('[完成] vendor/cdp-cli 就绪（build 入口，运行时依赖由根承担）')
 
 console.log('\n所有发布依赖已打包到 vendor/')
 console.log('下一步：npm publish（files 含 dist + vendor）')

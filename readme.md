@@ -30,12 +30,12 @@ git clone --recurse-submodules https://github.com/mickorz/CocosCLI.git
 
 cd CocosCLI
 npm install
-npm run setup     # 初始化 submodule 依赖（CocosMCP build + cdp-cli build/link）
+npm run setup     # 初始化 submodule 依赖（install + build CocosMCP 与 cdp-cli）
 npm run build
 npm link
 ```
 
-`npm link` 后即可全局使用 `cocoscli` 命令。`npm run setup` 会构建 `deps/CocosMCP` 与 `deps/cdp-cli`（cdp-cli 额外 `npm link` 全局可用）。普通 clone 后补一句 `git submodule update --init --recursive` 即可。
+`npm link` 后即可全局使用 `cocoscli` 与 `cdp-cli` 命令（cdp-cli 由 cocoscli 的 bin wrapper 提供，指向 deps/cdp-cli/build）。`npm run setup` 会 install + build `deps/CocosMCP` 与 `deps/cdp-cli`。普通 clone 后补一句 `git submodule update --init --recursive` 即可。
 
 ## 使用示例
 
@@ -105,7 +105,7 @@ init 会依次执行：
 
 1. 定位本机 CocosCreator（5 级查找）
 2. 判定当前目录是否 Cocos 3.x 工程
-3. 克隆 CocosMCP 扩展到 `extensions/CocosMCP`（普通 `git clone`）
+3. 安装 CocosMCP 到 `extensions/CocosMCP`（优先 vendor/deps copy，fallback git clone）
 4. 构建 CocosMCP（`npm install` + `npm run build`，生成 `dist`，否则 CocosCreator 加载会报错）
 5. 写入默认 `mcp-server.json` 到 `settings/`（端口 3001、autoStart 等，已存在则跳过）
 6. 用 CocosCreator 打开工程（自动追加 `--nologin`）
