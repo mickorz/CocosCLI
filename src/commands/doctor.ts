@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { hasCommand } from '../utils/dep-check.js';
+import { hasCommand, cdpCliReady } from '../utils/dep-check.js';
 
 // doctor 命令：cocoscli 运行所需关键依赖体检
 //
@@ -18,7 +18,7 @@ export async function doctor(): Promise<void> {
   // 每项只探测一次，避免重复 where/which
   const gitOk = hasCommand('git');
   const npmOk = hasCommand('npm');
-  const cdpOk = hasCommand('cdp-cli');
+  const cdpOk = cdpCliReady();
 
   const items = [
     { name: 'git', ok: gitOk, detail: gitOk ? 'git 可用' : 'git 不在 PATH' },
@@ -27,7 +27,7 @@ export async function doctor(): Promise<void> {
     {
       name: 'cdp-cli',
       ok: cdpOk,
-      detail: cdpOk ? 'cdp-cli 可用（browserlogs/previewscene 依赖）' : 'cdp-cli 不在 PATH（npm run setup 安装）',
+      detail: cdpOk ? 'cdp-cli 入口可用（deps/vendor dist）' : 'cdp-cli 入口不存在（npm run setup 构建）',
     },
   ];
 

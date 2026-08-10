@@ -1,12 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawnSync, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import * as os from 'os';
 import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
 import { verifyMcpConnection, fetchPreviewUrl, readMcpPort } from '../utils/verify.js';
 import { writeCompileLog } from '../utils/compile-log.js';
 import { ensureCdpCli } from '../utils/dep-check.js';
+import { runCdpCliSync } from '../utils/cdp-cli.js';
 
 // browserlogs 命令：通过 cdp-cli 读取 CDP Chrome 中 CocosCreator 预览页的控制台日志
 //
@@ -23,10 +24,9 @@ function sleep(ms: number): Promise<void> {
 /** CDP Chrome 前置检查（不可达则自动启动）*/
 async function ensureCdpChrome(): Promise<void> {
   const checkCdp = (): boolean => {
-    const r = spawnSync('cdp-cli', ['tabs'], {
+    const r = runCdpCliSync(['tabs'], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
-      shell: true,
       timeout: 5000,
     });
     return r.status === 0;
@@ -133,10 +133,9 @@ export async function browserLogs(
     const previewHost = previewUrl ? (previewUrl.match(/\/\/([^/]+)/)?.[1] ?? '') : '';
 
     // cdp-cli tabs 列出所有 CDP Chrome 页面
-    const tabsResult = spawnSync('cdp-cli', ['tabs'], {
+    const tabsResult = runCdpCliSync(['tabs'], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
-      shell: true,
       timeout: 5000,
     });
     const tabLines = (tabsResult.stdout || '')
@@ -202,10 +201,9 @@ export async function browserLogs(
 
   // ===== 执行 cdp-cli console =====
 
-  const result = spawnSync('cdp-cli', cdpArgs, {
+  const result = runCdpCliSync(cdpArgs, {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'inherit'],
-    shell: true,
     timeout: 30000,
   });
 

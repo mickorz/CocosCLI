@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawnSync, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import * as os from 'os';
 import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
@@ -11,6 +11,8 @@ import {
   sceneManagementGetList,
   sceneManagementOpen,
 } from '../utils/verify.js';
+import { ensureCdpCli } from '../utils/dep-check.js';
+import { runCdpCliSync } from '../utils/cdp-cli.js';
 
 // previewscene 命令：CocosMCP 切场景 + cdp-cli 在 CDP Chrome 打开预览
 //
@@ -72,23 +74,13 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
   console.log(chalk.gray(`[检查2] CocosMCP HTTP server 可访问（${mcpPort}）`));
 
   // 检查3：cdp-cli 可用
-  const cdpCheck = spawnSync('cdp-cli', ['--version'], {
-    stdio: ['ignore', 'ignore', 'ignore'],
-    shell: true,
-  });
-  if (cdpCheck.status !== 0) {
-    console.log(chalk.red('[检查3] cdp-cli 不可用（不在 PATH）'));
-    console.log(chalk.gray('  请执行：npm run setup'));
-    process.exit(1);
-  }
-  console.log(chalk.gray('[检查3] cdp-cli 可用'));
+  ensureCdpCli();
 
   // 检查4：CDP Chrome 可达（不可达则自动启动 Chrome --remote-debugging-port=9223）
   const checkCdp = (): boolean => {
-    const r = spawnSync('cdp-cli', ['tabs'], {
+    const r = runCdpCliSync(['tabs'], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
-      shell: true,
       timeout: 5000,
     });
     return r.status === 0;
@@ -177,10 +169,9 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
 
   // 4. CDP Chrome 打开预览（拿已有页面 id → go 导航，比 new 更可靠）
   console.log(chalk.gray(`\nCDP Chrome 打开预览：${previewUrl}...`));
-  const tabsResult2 = spawnSync('cdp-cli', ['tabs'], {
+  const tabsResult2 = runCdpCliSync(['tabs'], {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'ignore'],
-    shell: true,
     timeout: 5000,
   });
   const tabLines = (tabsResult2.stdout || '').trim().split('\n').filter(Boolean);
@@ -192,10 +183,9 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
   const pageId = firstPage.id;
   console.log(chalk.gray(`CDP 页面：${firstPage.title}（${pageId}）`));
 
-  const goResult = spawnSync('cdp-cli', ['go', pageId, previewUrl], {
+  const goResult = runCdpCliSync(['go', pageId, previewUrl], {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'inherit'],
-    shell: true,
     timeout: 30000,
   });
   if (goResult.status !== 0) {
@@ -209,14 +199,12 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
 
   console.log(chalk.gray('验证 window.cc...'));
   // page 用 localhost 子串匹配（cdp-cli page 参数是 title/id 子串，不是 url）
-  // expression 不含空格（shell:true 时空格会拆分成多个参数）
-  const evalResult = spawnSync(
-    'cdp-cli',
+  // shell:false，参数数组原样传递，不会被 shell 拆分
+  const evalResult = runCdpCliSync(
     ['eval', pageId, 'typeof(window.cc)'],
     {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'inherit'],
-      shell: true,
       timeout: 10000,
     }
   );
