@@ -219,6 +219,25 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
     ''
   );
 
+  // 第5步：读浏览器日志 + 修复（阶段3）
+  console.log(chalk.blue('\n第5步 读浏览器运行日志（cocos-browser-logs）'));
+  const logsPrompt = `/cocos-browser-logs 读取浏览器控制台 error 日志，如果有 error 分析原因并修复脚本`;
+  console.log(chalk.gray(`  prompt：${logsPrompt}`));
+  const logsResult = await runOpencodeMonitored(logsPrompt, dir, (st, info) => {
+    const line = info ? `[${st}] ${info}` : `[${st}]`;
+    console.log(chalk.gray(`  ${line}`));
+  });
+  const logsSucc = logsResult.state === 'SUCCEEDED';
+  console.log(logsSucc ? chalk.green(`  日志检查：${logsResult.state}`) : chalk.red(`  日志检查：${logsResult.state}`));
+  report.push(
+    '## 第5步 浏览器日志检查',
+    `- 最终状态：${logsResult.state}`,
+    `- 退出码：${logsResult.exitCode}`,
+    `- 调用工具：${logsResult.toolsCalled.join(', ') || '(无)'}`,
+    logsResult.error ? `- 错误：${logsResult.error}` : '',
+    ''
+  );
+
   // 写报告
   const reportDir = path.join(dir, '.cocoscli');
   fs.mkdirSync(reportDir, { recursive: true });
