@@ -316,17 +316,38 @@ export async function sceneManagementGetList(mcpPort: number): Promise<SceneInfo
   return Array.isArray(data) ? (data as SceneInfo[]) : [];
 }
 
+/** scene_management open 的结果 */
+export type SceneOpenResult = 'success' | 'timeout' | 'failed';
+
 /**
  * 调 cocos-mcp scene_management open，切换到指定场景
- * @returns true 切换成功
+ *
+ * 切场景可能很慢（大场景 / 编辑器卡顿），HTTP 会长时间不响应，导致 CLI 卡死在
+ * 「切换场景...」这一步。用 Promise.race 强制 timeoutMs 超时兜底（与 httpPostJson
+ * 内部 req.timeout 双保险），超时返回 'timeout'，让上层明确提示并中断，而非模糊地
+ * 「场景切换失败」让用户傻等。
+ *
+ * 注：httpPostJson 超时 / 网络异常 / JSON 解析失败都返回 null；前置 verifyMcpConnection
+ * 已确认 HTTP 可达，切场景期间 null 基本即「编辑器无响应」，统一归为超时。
+ *
+ * @returns 'success' 切换成功 / 'timeout' 超时或无响应 / 'failed' 编辑器明确返回失败
  */
-export async function sceneManagementOpen(mcpPort: number, scenePath: string): Promise<boolean> {
-  const resp = await httpPostJson(
-    `http://127.0.0.1:${mcpPort}/api/scene/scene_management`,
-    { action: 'open', scenePath },
-    30000
-  );
-  return resp?.success === true;
+export async function sceneManagementOpen(
+  mcpPort: number,
+  scenePath: string,
+  timeoutMs = 30000
+): Promise<SceneOpenResult> {
+  const resp = await Promise.race([
+    httpPostJson(
+      `http://127.0.0.1:${mcpPort}/api/scene/scene_management`,
+      { action: 'open', scenePath },
+      timeoutMs
+    ),
+    // 超时兜底：到点强制返回 null（httpPostJson 内部 req.timeout 也会触发，此处双保险）
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+  if (resp === null) return 'timeout';
+  return resp?.success === true ? 'success' : 'failed';
 }
 
 // ==================== opencode 事件流监控 ====================

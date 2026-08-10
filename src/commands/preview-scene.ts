@@ -149,11 +149,16 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
   }
   console.log(chalk.gray(`找到场景：${target.name}（${target.path}）`));
 
-  // 2. open 切场景
-  console.log(chalk.gray(`切换场景：${target.path}...`));
-  const opened = await sceneManagementOpen(mcpPort, target.path);
-  if (!opened) {
-    console.log(chalk.red(`场景切换失败：${target.path}`));
+  // 2. open 切场景（30 秒超时兜底，防编辑器切大场景卡死）
+  console.log(chalk.gray(`切换场景：${target.path}（超时 30 秒）...`));
+  const openResult = await sceneManagementOpen(mcpPort, target.path);
+  if (openResult === 'timeout') {
+    console.log(chalk.red(`场景切换超时（30 秒未响应）：${target.path}`));
+    console.log(chalk.gray('  可能场景过大或编辑器卡顿；可重试，或检查 CocosCreator 是否正常响应。'));
+    process.exit(1);
+  }
+  if (openResult !== 'success') {
+    console.log(chalk.red(`场景切换失败：${target.path}（编辑器返回失败）`));
     process.exit(1);
   }
 
