@@ -8,10 +8,12 @@
     "cocoscli": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "vendor"
   ],
   "scripts": {
     "setup": "node scripts/setup-deps.mjs",
+    "prepare-package": "node scripts/prepare-package.mjs",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "dev": "tsx src/index.ts",
