@@ -134,16 +134,31 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
 
   // ===== cdp-cli：CDP Chrome 打开预览 + 验证 =====
 
-  // 4. CDP Chrome 打开预览
+  // 4. CDP Chrome 打开预览（拿已有页面 id → go 导航，比 new 更可靠）
   console.log(chalk.gray(`\nCDP Chrome 打开预览：${previewUrl}...`));
-  const newResult = spawnSync('cdp-cli', ['new', previewUrl], {
+  const tabsResult2 = spawnSync('cdp-cli', ['tabs'], {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    shell: true,
+    timeout: 5000,
+  });
+  const tabLines = (tabsResult2.stdout || '').trim().split('\n').filter(Boolean);
+  const firstPage = tabLines.length > 0 ? JSON.parse(tabLines[0]) : null;
+  if (!firstPage) {
+    console.log(chalk.red('CDP Chrome 无可用页面'));
+    process.exit(1);
+  }
+  const pageId = firstPage.id;
+  console.log(chalk.gray(`CDP 页面：${firstPage.title}（${pageId}）`));
+
+  const goResult = spawnSync('cdp-cli', ['go', pageId, previewUrl], {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'inherit'],
     shell: true,
     timeout: 30000,
   });
-  if (newResult.status !== 0) {
-    console.log(chalk.red('CDP 打开预览失败'));
+  if (goResult.status !== 0) {
+    console.log(chalk.red('CDP 导航预览失败'));
     process.exit(1);
   }
 
@@ -152,9 +167,11 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
   await sleep(3000);
 
   console.log(chalk.gray('验证 window.cc...'));
+  // page 用 localhost 子串匹配（cdp-cli page 参数是 title/id 子串，不是 url）
+  // expression 不含空格（shell:true 时空格会拆分成多个参数）
   const evalResult = spawnSync(
     'cdp-cli',
-    ['eval', previewUrl, 'typeof window.cc'],
+    ['eval', pageId, 'typeof(window.cc)'],
     {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'inherit'],
