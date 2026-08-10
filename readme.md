@@ -18,7 +18,7 @@
 
 ## 环境要求
 
-- Node.js >= 18
+- Node.js >= 20.19.0
 - Cocos Creator 3.7.x（偏好 3.7.3）
 - git（init 克隆扩展、submodule 拉取需要）
 - cdp-cli（browserlogs/previewscene 依赖，`npm run setup` 安装）
