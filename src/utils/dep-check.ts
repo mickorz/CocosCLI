@@ -6,7 +6,7 @@ import { resolveCdpCliEntry } from './cdp-cli.js';
 // 依赖检查工具
 //
 // hasCommand(command)   判断命令是否在 PATH（where.exe / which），doctor 体检 git/npm 用
-// cdpCliReady()         cdp-cli 入口是否可用（vendor/deps dist 存在，不退出）
+// cdpCliReady()         cdp-cli 入口是否可用（vendor/deps build 存在，不退出）
 // ensureCdpCli()        cdp-cli 不可用时报错 + 提示 npm run setup 并退出
 //                        （避免调用方拿到难分析的 spawn 错误）
 
@@ -32,7 +32,7 @@ export function hasCommand(command: string): boolean {
 /**
  * cdp-cli 入口是否可用（不退出）
  *
- * 检查 deps/cdp-cli/dist/index.js（或 vendor）是否存在，
+ * 检查 deps/cdp-cli/build/index.js（或 vendor）是否存在，
  * 不依赖全局 npm link。供 doctor 体检探测，不触发退出。
  */
 export function cdpCliReady(): boolean {
@@ -43,7 +43,7 @@ export function cdpCliReady(): boolean {
  * cdp-cli 缺失时的统一修复提示
  */
 export function cdpCliMissingHint(): string {
-  return ['cdp-cli 入口不存在（deps/cdp-cli/dist/index.js 未构建）。', '', '请执行：', '    npm run setup'].join('\n');
+  return ['cdp-cli 入口不存在（deps/cdp-cli/build/index.js 未构建）。', '', '请执行：', '    npm run setup'].join('\n');
 }
 
 /**
@@ -57,7 +57,7 @@ export function ensureCdpCli(): void {
     console.log(chalk.gray('[检查3] cdp-cli 可用'));
     return;
   }
-  console.log(chalk.red('[检查3] cdp-cli 入口不存在（deps/cdp-cli/dist/index.js 未构建）'));
+  console.log(chalk.red('[检查3] cdp-cli 入口不存在（deps/cdp-cli/build/index.js 未构建）'));
   console.log(chalk.gray(cdpCliMissingHint()));
   process.exit(1);
 }

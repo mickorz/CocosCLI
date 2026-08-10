@@ -27,7 +27,7 @@ export async function doctor(): Promise<void> {
     {
       name: 'cdp-cli',
       ok: cdpOk,
-      detail: cdpOk ? 'cdp-cli 入口可用（deps/vendor dist）' : 'cdp-cli 入口不存在（npm run setup 构建）',
+      detail: cdpOk ? 'cdp-cli 入口可用（deps/vendor build）' : 'cdp-cli 入口不存在（npm run setup 构建）',
     },
   ];
 

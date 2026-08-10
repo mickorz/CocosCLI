@@ -10,7 +10,7 @@ import { cloneCocosMcp, buildCocosMcp, writeDefaultMcpServerConfig, writeOpencod
  * 七步流程：
  *   1. 定位 CocosCreator（5 级查找，找不到则报错退出）
  *   2. 判定当前目录是否 Cocos 3.x 工程（不是则中止）
- *   3. 克隆 CocosMCP 到 extensions/CocosMCP（优先 deps submodule，fallback 远端）
+ *   3. 安装 CocosMCP 到 extensions/CocosMCP（优先 vendor/deps copy，fallback 远端）
  *   4. 构建 CocosMCP（npm install + build，生成 dist，否则 CocosCreator 加载报错）
  *   5. 写入默认 mcp-server.json 到 settings/（已存在则跳过）
  *   6. 写入默认 opencode.json 到工程根（放开 external_directory 权限，供 verify 使用）
@@ -35,16 +35,16 @@ export function init(port = 3001, noLogin = true): void {
     process.exit(1);
   }
 
-  // 第三步：克隆 CocosMCP 到 extensions（普通 git clone）
-  const spinner = createSpinner('克隆 CocosMCP 扩展...').start();
+  // 第三步：安装 CocosMCP 到 extensions（优先 vendor/deps copy，fallback git clone）
+  const spinner = createSpinner('安装 CocosMCP 扩展...').start();
   try {
     const result = cloneCocosMcp(cwd);
-    const msg = result.status === 'cloned' ? 'CocosMCP 克隆完成（来自 deps/CocosMCP submodule）' : 'CocosMCP 已存在（如需更新跑 cocoscli remove + init）';
+    const msg = result.status === 'cloned' ? 'CocosMCP 安装完成（来自 vendor/deps copy）' : 'CocosMCP 已存在（如需更新跑 cocoscli remove + init）';
     spinnerSucceed(spinner, msg);
   } catch (e) {
-    spinnerFail(spinner, '克隆 CocosMCP 失败');
+    spinnerFail(spinner, '安装 CocosMCP 失败');
     console.log(chalk.red(e instanceof Error ? e.message : String(e)));
-    console.log(chalk.gray('  优先从 deps/CocosMCP 克隆（submodule），不存在时 fallback 远端。submodule 未初始化请跑：git submodule update --init --recursive'));
+    console.log(chalk.gray('  优先从 vendor/deps 复制（submodule），不存在时 fallback 远端 git clone。submodule 未初始化请跑：git submodule update --init --recursive'));
     process.exit(1);
   }
 
