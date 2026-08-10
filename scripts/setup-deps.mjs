@@ -18,7 +18,7 @@ const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 
 function run(args, cwd) {
   console.log(`\n> npm ${args.join(' ')}`)
-  execFileSync(npm, args, { cwd, stdio: 'inherit' })
+  execFileSync(npm, args, { cwd, stdio: 'inherit', shell: true })
 }
 
 // ------------------------
