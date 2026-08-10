@@ -269,8 +269,15 @@ export function resolveOpencodePath(): string | null {
     if (prefix) {
       const isWin = process.platform === 'win32';
       const candidates = isWin
-        ? [path.join(prefix, 'opencode.cmd'), path.join(prefix, 'opencode.exe')]
-        : [path.join(prefix, 'opencode')];
+        ? [
+            path.join(prefix, 'opencode.cmd'),
+            path.join(prefix, 'opencode.exe'),
+            path.join(prefix, 'node_modules', 'opencode-ai', 'bin', 'opencode.exe'),
+          ]
+        : [
+            path.join(prefix, 'opencode'),
+            path.join(prefix, 'node_modules', 'opencode-ai', 'bin', 'opencode'),
+          ];
       for (const c of candidates) {
         if (fs.existsSync(c)) {
           _opencodePath = c;

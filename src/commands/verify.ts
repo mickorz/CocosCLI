@@ -53,7 +53,7 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
   const opencodePath = resolveOpencodePath();
   if (!opencodePath) {
     console.log(chalk.red('opencode 未找到（不在 PATH，npm 全局也没找到）'));
-    console.log(chalk.gray('  安装：npm install -g opencode'));
+    console.log(chalk.gray('  安装：npm install -g opencode-ai'));
     console.log(chalk.gray('  或确认 npm 全局 bin 目录在 PATH'));
     process.exit(1);
   }
