@@ -53,8 +53,23 @@ src/
 ```bash
 npm run build       # tsc 编译
 npm test            # vitest 单测
-npm link            # 全局链接 cocoscli
+npm link            # 全局链接 cocoscli（同时得到 cocoscli 与 cdp-cli 命令）
 ```
+
+## 发布注意事项（submodule/vendor）
+
+发布前必看 [Docs/cocoscli-submodule发布问题记录.md](../Docs/cocoscli-submodule发布问题记录.md)。关键点：
+
+- cdp-cli 构建产物在 `deps/cdp-cli/build/`（非 dist），入口 `build/index.js`
+- `cocoscli init` 优先 `vendor/CocosMCP` copy → `deps/CocosMCP` → fallback GitHub，不用二次 git clone
+- Windows 调 npm.cmd 用 execSync 命令字符串（不带 shell 的 execFileSync 会 EINVAL；带 shell+args 会 DEP0190）
+- vendor 不放 node_modules（npm 不打包），cdp-cli 运行时依赖 ws/yargs 由根 package.json 承担
+- prepare-package copy 时排除 .gitignore（否则 npm pack 忽略 vendor/cdp-cli/build）
+- 改 package.json 后必须 git add package-lock.json 同步，npm ci 验证
+- cdp-cli 命令由 `src/cdp-cli-bin.ts` wrapper 提供（package.json bin），不依赖全局 npm link
+- engines node >=20.19.0（yargs 18 要求）
+
+发布流程：`npm run build:deps`（install+build，不 link）→ `npm run prepack`（build+build:deps+prepare-package）→ `npm pack` → `npm install -g ./tgz` → `cocoscli doctor` + `cdp-cli --help` 验证。
 
 ## 约定
 
