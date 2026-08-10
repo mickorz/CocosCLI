@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execSync } from 'node:child_process'
 import { cpSync, existsSync, rmSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
@@ -23,11 +23,9 @@ import process from 'node:process'
 // 用法：npm run prepare-package
 
 const root = process.cwd()
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-
 function run(args, cwd) {
   console.log(`\n> npm ${args.join(' ')}`)
-  execFileSync(npm, args, { cwd, stdio: 'inherit', shell: true })
+  execSync(`npm ${args.join(' ')}`, { cwd, stdio: 'inherit' })
 }
 
 /** 构造排除过滤器：跳过指定顶层目录（.git / node_modules / dist 等） */
