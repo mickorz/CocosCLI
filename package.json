@@ -14,7 +14,9 @@
   ],
   "scripts": {
     "setup": "node scripts/setup-deps.mjs",
+    "build:deps": "node scripts/build-deps.mjs",
     "prepare-package": "node scripts/prepare-package.mjs",
+    "prepack": "npm run build && npm run build:deps && npm run prepare-package",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "dev": "tsx src/index.ts",
