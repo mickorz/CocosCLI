@@ -14,23 +14,28 @@
 | `cocoscli remove [dir]` | 卸载 CocosMCP（关闭工程、删除扩展与 settings 配置），dir 省略时为当前目录 |
 | `cocoscli build <platform> [dir]` | 构建工程到指定平台（web-desktop/wechat/douyin 等），dir 省略时为当前目录 |
 | `cocoscli verify <scene> [dir]` | 验证工程：tsc 编译检查 + MCP/preview 连通性 + opencode 预览场景，dir 省略时为当前目录 |
+| `cocoscli doctor` | 依赖体检：检查 git/node/npm/cdp-cli 等关键依赖是否就绪 |
 
 ## 环境要求
 
 - Node.js >= 18
 - Cocos Creator 3.7.x（偏好 3.7.3）
-- git（init 命令克隆扩展需要）
+- git（init 克隆扩展、submodule 拉取需要）
+- cdp-cli（browserlogs/previewscene 依赖，`npm run setup` 安装）
 
 ## 安装
 
 ```bash
+git clone --recurse-submodules https://github.com/mickorz/CocosCLI.git
+
 cd CocosCLI
 npm install
+npm run setup     # 初始化 submodule 依赖（CocosMCP build + cdp-cli build/link）
 npm run build
 npm link
 ```
 
-`npm link` 后即可全局使用 `cocoscli` 命令。
+`npm link` 后即可全局使用 `cocoscli` 命令。`npm run setup` 会构建 `deps/CocosMCP` 与 `deps/cdp-cli`（cdp-cli 额外 `npm link` 全局可用）。普通 clone 后补一句 `git submodule update --init --recursive` 即可。
 
 ## 使用示例
 
@@ -80,6 +85,14 @@ cocoscli verify loading D:\MyGame            # 验证指定工程
 ```
 
 verify 会：启动 CocosCreator → `tsc --noEmit` 编译检查 → 验证 MCP 与 preview 连通 → 调 opencode（非交互，`run --format json`）预览场景并事件流监控，最后输出 `.cocoscli/verify-report.md`。状态监控细节见 `Docs/cocoscli-verify-opencode状态监控.md`。
+
+### 依赖体检
+
+```bash
+cocoscli doctor
+```
+
+doctor 检查 cocoscli 运行所需关键依赖（git/node/npm/cdp-cli），逐项输出 [完成]/[失败]。任一缺失会明确提示跑 `npm run setup`，而不是在具体命令里拿到难分析的 `spawn ENOENT`。对 AI / opencode 自动调用尤其重要。
 
 ### 初始化扩展
 

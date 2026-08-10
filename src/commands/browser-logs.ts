@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
 import { verifyMcpConnection, fetchPreviewUrl, readMcpPort } from '../utils/verify.js';
 import { writeCompileLog } from '../utils/compile-log.js';
+import { ensureCdpCli } from '../utils/dep-check.js';
 
 // browserlogs 命令：通过 cdp-cli 读取 CDP Chrome 中 CocosCreator 预览页的控制台日志
 //
@@ -32,11 +33,11 @@ async function ensureCdpChrome(): Promise<void> {
   };
 
   if (checkCdp()) {
-    console.log(chalk.gray('[检查3] CDP Chrome 可达'));
+    console.log(chalk.gray('[检查4] CDP Chrome 可达'));
     return;
   }
 
-  console.log(chalk.gray('[检查3] CDP Chrome 不可达，尝试自动启动...'));
+  console.log(chalk.gray('[检查4] CDP Chrome 不可达，尝试自动启动...'));
   const chromePaths =
     process.platform === 'win32'
       ? [
@@ -48,7 +49,7 @@ async function ensureCdpChrome(): Promise<void> {
         : ['/usr/bin/google-chrome', '/usr/bin/chromium-browser'];
   const chromePath = chromePaths.find((p) => fs.existsSync(p));
   if (!chromePath) {
-    console.log(chalk.red('[检查3] 找不到 Chrome'));
+    console.log(chalk.red('[检查4] 找不到 Chrome'));
     console.log(chalk.gray('  请手动启动：chrome --remote-debugging-port=9223'));
     process.exit(1);
   }
@@ -62,10 +63,10 @@ async function ensureCdpChrome(): Promise<void> {
   console.log(chalk.gray('  等待 CDP Chrome 启动（5 秒）...'));
   await sleep(5000);
   if (!checkCdp()) {
-    console.log(chalk.red('[检查3] CDP Chrome 自动启动失败'));
+    console.log(chalk.red('[检查4] CDP Chrome 自动启动失败'));
     process.exit(1);
   }
-  console.log(chalk.gray('[检查3] CDP Chrome 已启动并可达'));
+  console.log(chalk.gray('[检查4] CDP Chrome 已启动并可达'));
 }
 
 /**
@@ -115,7 +116,10 @@ export async function browserLogs(
   }
   console.log(chalk.gray(`[检查2] CocosMCP HTTP server 可访问（${mcpPort}）`));
 
-  // 检查3：CDP Chrome 可达（不可达自动启动）
+  // 检查3：cdp-cli 可用
+  ensureCdpCli();
+
+  // 检查4：CDP Chrome 可达（不可达自动启动）
   await ensureCdpChrome();
 
   // ===== 确定 page =====

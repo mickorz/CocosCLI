@@ -78,7 +78,7 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
   });
   if (cdpCheck.status !== 0) {
     console.log(chalk.red('[检查3] cdp-cli 不可用（不在 PATH）'));
-    console.log(chalk.gray('  安装：npm install -g @myerscarpenter/cdp-cli'));
+    console.log(chalk.gray('  请执行：npm run setup'));
     process.exit(1);
   }
   console.log(chalk.gray('[检查3] cdp-cli 可用'));

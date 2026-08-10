@@ -11,6 +11,7 @@
     "dist"
   ],
   "scripts": {
+    "setup": "node scripts/setup-deps.mjs",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "dev": "tsx src/index.ts",

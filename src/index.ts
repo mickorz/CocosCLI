@@ -22,6 +22,7 @@ import { verify } from './commands/verify.js';
 import { compile } from './commands/compile.js';
 import { previewScene } from './commands/preview-scene.js';
 import { browserLogs } from './commands/browser-logs.js';
+import { doctor } from './commands/doctor.js';
 
 const program = new Command();
 
@@ -92,6 +93,12 @@ program
   .action(async (dir: string | undefined, options: Record<string, unknown>) => {
     await browserLogs(dir, options as Parameters<typeof browserLogs>[1]);
   });
+
+// doctor：依赖体检（检查 git/node/npm/cdp-cli 等关键依赖是否就绪）
+program
+  .command('doctor')
+  .description('依赖体检：检查 git/node/npm/cdp-cli 等关键依赖是否就绪')
+  .action(async () => doctor());
 
 // 无参数时显示帮助
 if (process.argv.length === 2) {
