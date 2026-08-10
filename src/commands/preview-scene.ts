@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawnSync } from 'child_process';
+import { spawnSync, spawn } from 'child_process';
+import * as os from 'os';
 import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
 import {
@@ -82,19 +83,59 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
   }
   console.log(chalk.gray('[检查3] cdp-cli 可用'));
 
-  // 检查4：CDP Chrome 可达（cdp-cli tabs）
-  const tabsResult = spawnSync('cdp-cli', ['tabs'], {
-    encoding: 'utf-8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-    shell: true,
-    timeout: 5000,
-  });
-  if (tabsResult.status !== 0) {
-    console.log(chalk.red('[检查4] CDP Chrome 不可达（cdp-cli tabs 失败）'));
-    console.log(chalk.gray('  需启动 Chrome：chrome.exe --remote-debugging-port=9223'));
-    process.exit(1);
+  // 检查4：CDP Chrome 可达（不可达则自动启动 Chrome --remote-debugging-port=9223）
+  const checkCdp = (): boolean => {
+    const r = spawnSync('cdp-cli', ['tabs'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      shell: true,
+      timeout: 5000,
+    });
+    return r.status === 0;
+  };
+
+  if (checkCdp()) {
+    console.log(chalk.gray('[检查4] CDP Chrome 可达'));
+  } else {
+    console.log(chalk.gray('[检查4] CDP Chrome 不可达，尝试自动启动...'));
+    // 找 Chrome 可执行文件
+    const chromePaths =
+      process.platform === 'win32'
+        ? [
+            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+          ]
+        : process.platform === 'darwin'
+          ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']
+          : ['/usr/bin/google-chrome', '/usr/bin/chromium-browser'];
+    const chromePath = chromePaths.find((p) => fs.existsSync(p));
+    if (!chromePath) {
+      console.log(chalk.red('[检查4] 找不到 Chrome'));
+      console.log(chalk.gray('  请手动启动：chrome --remote-debugging-port=9223'));
+      process.exit(1);
+    }
+    console.log(chalk.gray(`  Chrome：${chromePath}`));
+    // 启动 Chrome（后台，独立 user-data-dir 避免和用户 Chrome 冲突）
+    const userDataDir = path.join(os.tmpdir(), 'cocoscli-chrome-cdp');
+    spawn(
+      chromePath,
+      [
+        '--remote-debugging-port=9223',
+        `--user-data-dir=${userDataDir}`,
+        '--no-first-run',
+        '--no-default-browser-check',
+      ],
+      { detached: true, stdio: 'ignore' }
+    ).unref();
+    console.log(chalk.gray('  等待 CDP Chrome 启动（5 秒）...'));
+    await sleep(5000);
+    if (!checkCdp()) {
+      console.log(chalk.red('[检查4] CDP Chrome 自动启动失败'));
+      console.log(chalk.gray('  请手动启动：chrome --remote-debugging-port=9223'));
+      process.exit(1);
+    }
+    console.log(chalk.gray('[检查4] CDP Chrome 已启动并可达'));
   }
-  console.log(chalk.gray('[检查4] CDP Chrome 可达'));
 
   // ===== CocosMCP：切场景 + 拿 previewUrl =====
 
