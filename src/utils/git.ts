@@ -1,18 +1,23 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
 
 // CocosMCP 扩展安装与构建
 //
 // cloneCocosMcp(projectPath)
 //        ├─> 确保 extensions/ 存在
-//        ├─> extensions/CocosMCP 已存在  返回 exists（跳过）
-//        └─> 否则  git clone <url> extensions/CocosMCP
+//        ├─> extensions/CocosMCP 已存在  返回 exists（跳过，更新走 remove + init）
+//        └─> 否则 优先从 deps/CocosMCP（submodule 锁定版本）clone
+//                 deps 不存在（全局安装无 submodule）时 fallback 远端 URL
+//
+// resolveDepsCocosMcp()
+//        └─> 基于 import.meta.url 定位仓库内 deps/CocosMCP
 //
 // buildCocosMcp(projectPath)
 //        └─> npm install + npm run build（生成 dist，否则 CocosCreator 加载报错）
 
-/** CocosMCP 扩展仓库地址（本地 Gitea） */
+/** CocosMCP 扩展仓库地址（fallback：deps 不存在时用，本地 Gitea） */
 export const COCOS_MCP_URL = 'http://127.0.0.1:3000/mickorz/CocosMCP.git';
 
 /** extensions 子目录下 CocosMCP 的目标目录名 */
@@ -20,12 +25,29 @@ export const COCOS_MCP_DIR = 'CocosMCP';
 
 /** 安装结果 */
 export interface CloneResult {
-  status: 'cloned' | 'exists' | 'updated';
+  status: 'cloned' | 'exists';
 }
 
 /**
- * 用普通 git clone 把 CocosMCP 装到 <project>/extensions/CocosMCP
- * 已存在则跳过，否则执行 git clone
+ * 定位 CocosCLI 仓库内的 deps/CocosMCP（submodule）
+ *
+ * git.ts 编译到 dist/utils/git.js，import.meta.url 指向 dist/utils，
+ * 上两级到仓库根再进 deps/CocosMCP。src 运行（tsx dev）时同理。
+ *
+ * 全局 npm 安装（package files 不含 deps）时此路径不存在，
+ * 调用方应 fallback 远端 clone。
+ */
+export function resolveDepsCocosMcp(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  return path.resolve(here, '..', '..', 'deps', 'CocosMCP');
+}
+
+/**
+ * 把 CocosMCP 装到 <project>/extensions/CocosMCP
+ *
+ * 优先从 deps/CocosMCP（submodule 锁定版本）clone 到目标工程，
+ * deps 不存在（全局安装无 submodule）时 fallback 远端 COCOS_MCP_URL。
+ * 已存在则跳过（submodule 版本锁定，更新走 cocoscli remove + init）。
  *
  * @returns cloned 成功克隆 / exists 已存在跳过
  * @throws git clone 失败时抛错（命令层捕获提示）
@@ -37,17 +59,15 @@ export function cloneCocosMcp(projectPath: string): CloneResult {
   fs.mkdirSync(extensionsDir, { recursive: true });
 
   if (fs.existsSync(targetDir)) {
-    // 已存在 → git pull 更新（拉最新 CocosMCP，含新工具如 run_script_diagnostics）
-    try {
-      execSync('git pull', { cwd: targetDir, stdio: ['ignore', 'pipe', 'pipe'] });
-      return { status: 'updated' };
-    } catch {
-      // git pull 失败（本地改动冲突等），保持现状
-      return { status: 'exists' };
-    }
+    // 已存在 → 跳过（submodule 版本锁定，git pull 无意义，更新走 remove + init）
+    return { status: 'exists' };
   }
 
-  execSync(`git clone ${COCOS_MCP_URL} "${targetDir}"`, {
+  // 优先从本地 deps/CocosMCP（submodule）clone，版本锁定到当前 commit
+  const depsCocosMcp = resolveDepsCocosMcp();
+  const src = fs.existsSync(depsCocosMcp) ? depsCocosMcp : COCOS_MCP_URL;
+
+  execSync(`git clone "${src}" "${targetDir}"`, {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   return { status: 'cloned' };

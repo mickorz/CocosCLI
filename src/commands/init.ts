@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import { createSpinner, spinnerSucceed, spinnerFail } from '../utils/spinner.js';
 import { getCocosCreatorPath, openCocosProject } from '../utils/cocos.js';
 import { isCocosProject } from '../utils/project.js';
-import { cloneCocosMcp, buildCocosMcp, writeDefaultMcpServerConfig, writeOpencodePermission, COCOS_MCP_URL } from '../utils/git.js';
+import { cloneCocosMcp, buildCocosMcp, writeDefaultMcpServerConfig, writeOpencodePermission } from '../utils/git.js';
 
 /**
  * init 命令：为当前 Cocos 工程安装 CocosMCP 扩展并打开
@@ -10,7 +10,7 @@ import { cloneCocosMcp, buildCocosMcp, writeDefaultMcpServerConfig, writeOpencod
  * 七步流程：
  *   1. 定位 CocosCreator（5 级查找，找不到则报错退出）
  *   2. 判定当前目录是否 Cocos 3.x 工程（不是则中止）
- *   3. 克隆 CocosMCP 到 extensions/CocosMCP（普通 git clone）
+ *   3. 克隆 CocosMCP 到 extensions/CocosMCP（优先 deps submodule，fallback 远端）
  *   4. 构建 CocosMCP（npm install + build，生成 dist，否则 CocosCreator 加载报错）
  *   5. 写入默认 mcp-server.json 到 settings/（已存在则跳过）
  *   6. 写入默认 opencode.json 到工程根（放开 external_directory 权限，供 verify 使用）
@@ -39,14 +39,12 @@ export function init(port = 3001, noLogin = true): void {
   const spinner = createSpinner('克隆 CocosMCP 扩展...').start();
   try {
     const result = cloneCocosMcp(cwd);
-    const msg = result.status === 'cloned' ? 'CocosMCP 克隆完成'
-      : result.status === 'updated' ? 'CocosMCP 已更新（git pull 拉最新）'
-      : 'CocosMCP 已存在（git pull 失败，保持现状）';
+    const msg = result.status === 'cloned' ? 'CocosMCP 克隆完成（来自 deps/CocosMCP submodule）' : 'CocosMCP 已存在（如需更新跑 cocoscli remove + init）';
     spinnerSucceed(spinner, msg);
   } catch (e) {
     spinnerFail(spinner, '克隆 CocosMCP 失败');
     console.log(chalk.red(e instanceof Error ? e.message : String(e)));
-    console.log(chalk.gray(`请确认本地 Gitea 服务在运行：${COCOS_MCP_URL}`));
+    console.log(chalk.gray('  优先从 deps/CocosMCP 克隆（submodule），不存在时 fallback 远端。submodule 未初始化请跑：git submodule update --init --recursive'));
     process.exit(1);
   }
 
