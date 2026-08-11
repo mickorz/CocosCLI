@@ -1,0 +1,186 @@
+{
+  "theme": "warm",
+  "page": {
+    "lang": "zh-CN",
+    "max_width": 480,
+    "eyebrow": "CLI TOOL · COCOS CREATOR 3.7.x",
+    "title": "cocoscli<br>命令行工具",
+    "subtitle": "一条命令，搞定 Cocos 工程的<br>安装 / 打开 / 构建 / 验证 / 编译",
+    "tags": ["TypeScript CLI", "CocosMCP 集成", "AI 友好"],
+    "toc": true
+  },
+  "sections": [
+    {
+      "id": "what",
+      "toc_label": "是什么",
+      "badge": {"text": "01", "color": "orange"},
+      "title": "这是什么",
+      "subtitle": "What it is",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "cocoscli 是面向 Cocos Creator 3.7.x 的命令行工具。它把 CocosMCP（编辑器扩展）的能力封装成 7 条 CLI 命令，让 AI 和开发者不用再手动点编辑器，一条命令就能完成装扩展、开工程、构建打包、预览验证、编译检查。",
+          "highlight": ["命令行工具", "7 条 CLI 命令", "一条命令"]
+        },
+        {
+          "type": "split",
+          "items": [
+            {"color": "orange", "title": "以前手动操作", "body": "重复点编辑器菜单、手动装扩展、手动拷 mcp 配置、构建出错靠肉眼看日志、预览要自己开浏览器盯 console。"},
+            {"color": "blue", "title": "现在 cocoscli", "body": "一条命令跑通全流程，配置自动写好，编译检查自动出 log，预览验证带 30 秒超时兜底，环境不对精准报错。"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "concept",
+      "toc_label": "核心理念",
+      "badge": {"text": "02", "color": "purple"},
+      "title": "核心理念",
+      "subtitle": "Core idea",
+      "blocks": [
+        {"type": "quote", "text": "把编辑器里散落的操作，收敛成可复现、可脚本化的命令。"},
+        {
+          "type": "paragraph",
+          "text": "每条调 CocosMCP 的命令背后，都跑通同一套四条链路前置检查。环境没准备好不会默默失败，而是精准指出卡在哪一步，让报错指向问题根因。",
+          "highlight": ["四条链路前置检查", "精准指出卡在哪一步"]
+        },
+        {
+          "type": "list",
+          "color": "purple",
+          "items": [
+            "CocosMCP 已装（extensions/CocosMCP 存在）",
+            "CocosMCP 已 build（dist/tools/&lt;tool&gt;.js 存在）",
+            "MCP HTTP server 在跑（verifyMcpConnection）",
+            "目标工具可用（调一次看响应结构）"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "commands",
+      "toc_label": "七大命令",
+      "badge": {"text": "03", "color": "green"},
+      "title": "七大命令",
+      "subtitle": "Seven commands",
+      "blocks": [
+        {
+          "type": "grid",
+          "items": [
+            {"no": "01", "color": "orange", "title": "cocoscli init", "body": "装 CocosMCP + build + 写 mcp-server.json / opencode.json + 打开工程，默认免登录。"},
+            {"no": "02", "color": "blue", "title": "cocoscli open / close", "body": "打开或关闭工程；已开则跳过，close 精准杀对应 CocosCreator 进程。"},
+            {"no": "03", "color": "pink", "title": "cocoscli remove", "body": "卸载 CocosMCP：关工程 + 删扩展 + 清配置，一步干净。"},
+            {"no": "04", "color": "purple", "title": "cocoscli build &lt;platform&gt;", "body": "构建打包到 web-desktop / wechat / douyin 等指定平台。"},
+            {"no": "05", "color": "green", "title": "cocoscli verify &lt;scene&gt;", "body": "验证：编译检查 + MCP/preview + opencode 预览场景，事件流监控。"},
+            {"no": "06", "color": "yellow", "dark": true, "title": "cocoscli compile", "body": "编译检查（run_script_diagnostics）+ 生成 log，快速定位脚本错误。"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "power",
+      "toc_label": "核心能力",
+      "badge": {"text": "04", "color": "pink"},
+      "title": "核心能力",
+      "subtitle": "迁移自 CocosMCP",
+      "blocks": [
+        {
+          "type": "directions",
+          "items": [
+            {"color": "orange", "title": "编译检查", "body": "调 cocos-mcp 的 run_script_diagnostics，扫脚本错误并生成 log，不用开编辑器就能查。"},
+            {"color": "purple", "title": "预览场景", "body": "MCP/preview + opencode 事件流监控，切场景加 30 秒超时兜底，避免一直挂着等。"},
+            {"color": "green", "title": "读浏览器日志", "body": "经 cdp-cli 桥接 Chrome DevTools Protocol，拿预览页面的 console 输出。"},
+            {"color": "blue", "title": "场景与资源操作", "body": "经 CocosMCP 暴露的 HTTP 端点操作场景节点、组件、预制体与资源。"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "flow",
+      "toc_label": "工作流",
+      "badge": {"text": "05", "color": "blue"},
+      "title": "工作流",
+      "subtitle": "从初始化到发版",
+      "blocks": [
+        {
+          "type": "flow",
+          "pre": [
+            {"icon": "装", "color": "yellow", "dark": true, "title": "初始化", "sub": "cocoscli init<br>装扩展 + 写配置 + 打开"},
+            {"icon": "验", "color": "orange", "title": "日常迭代", "sub": "compile 检查 / verify 验证<br>open 开工程，反复跑"}
+          ],
+          "split": [
+            {"icon": "打", "color": "green", "title": "发版打包", "sub": "cocoscli build platform<br>输出各平台产物"},
+            {"icon": "卸", "color": "pink", "title": "清理卸载", "sub": "cocoscli remove<br>关工程 + 删扩展 + 清配置"}
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "想接入 CocosMCP 的新能力？统一四步：读 SKILL 摸清端点，加 HTTP 函数，加命令，注册命令。新命令自动复用同一套四条链路前置检查。",
+          "highlight": ["统一四步", "四条链路前置检查"]
+        },
+        {
+          "type": "list",
+          "color": "blue",
+          "items": [
+            "读 SKILL：.opencode/skills/&lt;skill&gt;/SKILL.md 摸端点 / 参数 / 返回",
+            "加函数：utils/verify.ts 复用 httpPostJson / verifyMcpConnection",
+            "加命令：commands/ 里四条链路 + 调用 + 输出",
+            "注册：index.ts 用 commander 挂上"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "arch",
+      "toc_label": "架构栈",
+      "badge": {"text": "06", "color": "yellow"},
+      "title": "架构与技术栈",
+      "subtitle": "Structure &amp; stack",
+      "blocks": [
+        {"type": "paragraph", "text": "源码结构清晰，命令入口与工具函数分离，单测覆盖核心路径："},
+        {
+          "type": "screen",
+          "menu": [
+            {"text": "src", "active": true},
+            {"text": "index.ts", "indent": true},
+            {"text": "commands", "indent": true},
+            {"text": "utils", "indent": true},
+            {"text": "__tests__", "indent": true}
+          ],
+          "lines": [
+            {"color": "green", "label": "【index.ts】", "text": "commander 注册 7 条命令，全局 option 分发"},
+            {"color": "orange", "label": "【commands】", "text": "init / open / close / remove / build / verify / compile"},
+            {"color": "purple", "label": "【utils】", "text": "cocos 5 级查找 / 进程查杀 / git / build / verify / spinner"},
+            {"color": "blue", "label": "【__tests__】", "text": "vitest 单元测试，覆盖核心路径"}
+          ],
+          "collab": [
+            {"text": "TypeScript", "chip": "o"},
+            {"text": "ESM", "chip": "y"},
+            {"text": "commander", "chip": "g"},
+            {"text": "vitest", "chip": "p"},
+            {"text": "Node 大于等于 20.19"}
+          ]
+        },
+        {
+          "type": "tags",
+          "items": [
+            {"text": "TypeScript ESM", "color": "orange"},
+            {"text": "commander", "color": "blue"},
+            {"text": "chalk / ora", "color": "green"},
+            {"text": "vitest", "color": "purple"},
+            {"text": "ws / yargs", "color": "pink"}
+          ]
+        }
+      ]
+    }
+  ],
+  "footer": {
+    "before": [
+      "来源：项目 CLAUDE.md 与 package.json",
+      "cocoscli v0.0.1 · MIT · 面向 Cocos Creator 3.7.x",
+      "本页为项目图文介绍页，内容据项目文档整理"
+    ],
+    "after": [
+      "一条命令，搞定 Cocos 工程"
+    ]
+  }
+}

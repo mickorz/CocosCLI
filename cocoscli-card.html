@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cocoscli 命令行工具</title>
+<style>
+  :root{
+    --bg:#FBF4E8; --card:#FFFFFF; --ink:#3A2E26; --ink-soft:#8A7A6A; --line:#EFE3D2;
+    --orange:#FF7A45; --yellow:#FFC24B; --green:#4CAF6E; --purple:#9B7BD8; --pink:#FF7AA8; --blue:#4A90E2;
+    --shadow:0 10px 28px rgba(120,80,40,.10);
+    --shadow-sm:0 4px 14px rgba(120,80,40,.08);
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+    line-height:1.75;-webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:480px;margin:0 auto;padding:24px 16px 60px;}
+
+  .card{background:var(--card);border-radius:20px;padding:26px 22px;margin-bottom:18px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+  .card-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;}
+  .badge{flex:none;width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px;letter-spacing:.5px;box-shadow:var(--shadow-sm);}
+  .badge.orange{background:linear-gradient(135deg,#FF9A6A,var(--orange));}
+  .badge.green{background:linear-gradient(135deg,#6FD08C,var(--green));}
+  .badge.purple{background:linear-gradient(135deg,#B89BF0,var(--purple));}
+  .badge.pink{background:linear-gradient(135deg,#FF9DC0,var(--pink));}
+  .badge.blue{background:linear-gradient(135deg,#6FAEEA,var(--blue));}
+  .badge.yellow{background:linear-gradient(135deg,#FFD680,var(--yellow));color:#7A5A00;}
+  .card-title{font-size:19px;font-weight:800;margin:0;letter-spacing:.5px;}
+  .card-sub{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+
+  .lead{font-size:14.5px;color:var(--ink);margin:0 0 14px;}
+  mark{background:linear-gradient(180deg,transparent 60%, rgba(255,194,75,.55) 60%);color:var(--ink);padding:0 2px;border-radius:2px;font-weight:600;}
+
+  .tag{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;margin:2px 4px 2px 0;}
+  .tag.orange{background:rgba(255,122,69,.14);color:var(--orange);}
+  .tag.green{background:rgba(76,175,110,.15);color:var(--green);}
+  .tag.purple{background:rgba(155,123,216,.16);color:var(--purple);}
+  .tag.pink{background:rgba(255,122,168,.15);color:var(--pink);}
+  .tag.blue{background:rgba(74,144,226,.15);color:var(--blue);}
+  .tag.yellow{background:rgba(255,194,75,.22);color:#9A6B00;}
+
+  .cover{border-radius:24px;padding:34px 24px 30px;text-align:center;box-shadow:var(--shadow);position:relative;overflow:hidden;margin-bottom:20px;}
+  .cover::before{content:"";position:absolute;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.35);top:-40px;right:-30px;}
+  .cover::after{content:"";position:absolute;width:80px;height:80px;border-radius:50%;background:rgba(155,123,216,.18);bottom:-26px;left:-20px;}
+  .cover-eyebrow{display:inline-block;font-size:12px;font-weight:700;letter-spacing:2px;background:rgba(255,255,255,.7);padding:5px 14px;border-radius:999px;margin-bottom:14px;position:relative;}
+  .cover h1{font-size:25px;line-height:1.35;margin:0 0 10px;font-weight:900;position:relative;}
+  .cover p{font-size:13.5px;margin:0 0 16px;position:relative;}
+  .cover-tags{position:relative;}
+  .cover-tags .tag{background:rgba(255,255,255,.75);}
+  .cover{background:linear-gradient(160deg,#FFF3D9 0%, #FFE3C2 55%, #FFD0A8 100%);}
+  .cover-eyebrow{color:var(--orange);}
+  .cover h1{color:#3A2418;}
+  .cover p{color:#6A4A30;}
+
+  .toc{display:flex;flex-wrap:wrap;gap:8px;background:var(--card);border-radius:16px;padding:12px 14px;margin-bottom:18px;box-shadow:var(--shadow-sm);position:sticky;top:8px;z-index:10;}
+  .toc a{flex:1;min-width:64px;text-align:center;font-size:12px;font-weight:600;color:var(--ink-soft);text-decoration:none;padding:6px 4px;border-radius:10px;background:rgba(0,0,0,.03);transition:all .2s;}
+  .toc a:hover{color:#fff;background:var(--orange);}
+
+  .split{display:flex;flex-direction:column;gap:12px;}
+  .split-item{border-radius:14px;padding:14px 16px;border:1.5px solid transparent;}
+  .split-item.orange{background:rgba(255,122,69,.08);border-color:rgba(255,122,69,.25);}
+  .split-item.blue{background:rgba(74,144,226,.07);border-color:rgba(74,144,226,.25);}
+  .split-item.green{background:rgba(76,175,110,.08);border-color:rgba(76,175,110,.25);}
+  .split-item.purple{background:rgba(155,123,216,.08);border-color:rgba(155,123,216,.25);}
+  .split-item.pink{background:rgba(255,122,168,.08);border-color:rgba(255,122,168,.25);}
+  .split-item.yellow{background:rgba(255,194,75,.12);border-color:rgba(255,194,75,.30);}
+  .split-item h4{margin:0 0 6px;font-size:14px;display:flex;align-items:center;gap:8px;}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none;}
+  .dot.orange{background:var(--orange);}
+  .dot.blue{background:var(--blue);}
+  .dot.green{background:var(--green);}
+  .dot.purple{background:var(--purple);}
+  .dot.pink{background:var(--pink);}
+  .dot.yellow{background:var(--yellow);}
+  .split-item p{margin:0;font-size:13px;color:var(--ink-soft);}
+
+  .quote{margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(255,194,75,.16);border-left:4px solid var(--yellow);font-size:13.5px;color:#7A5A00;font-weight:600;}
+
+  .fit-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .pro{background:rgba(255,194,75,.05);border-radius:14px;padding:14px 13px;border:1px solid var(--line);position:relative;transition:transform .15s;}
+  .pro:hover{transform:translateY(-2px);}
+  .pro-no{width:24px;height:24px;border-radius:7px;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
+  .pro h5{margin:0 0 5px;font-size:13.5px;line-height:1.4;}
+  .pro p{margin:0;font-size:11.5px;color:var(--ink-soft);line-height:1.55;}
+
+  .dir{border-radius:14px;overflow:hidden;margin-bottom:10px;border:1px solid var(--line);background:var(--card);}
+  .dir-top{height:6px;width:100%;}
+  .dir-body{padding:13px 15px;}
+  .dir-body h5{margin:0 0 5px;font-size:14.5px;}
+  .dir-body p{margin:0;font-size:12.5px;color:var(--ink-soft);}
+
+  .flow{display:flex;flex-direction:column;gap:10px;}
+  .flow-step{background:rgba(255,194,75,.05);border:1px solid var(--line);border-radius:14px;padding:13px 15px;display:flex;align-items:center;gap:12px;}
+  .flow-ico{width:34px;height:34px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;}
+  .flow-step .ft{font-size:13.5px;font-weight:700;margin:0;}
+  .flow-step .fs{font-size:11.5px;color:var(--ink-soft);margin:2px 0 0;}
+  .flow-arrow{text-align:center;color:var(--orange);font-size:18px;line-height:1;margin:-4px 0;}
+  .flow-split{display:flex;gap:10px;}
+  .flow-split .flow-step{flex:1;flex-direction:column;align-items:flex-start;text-align:left;gap:4px;}
+
+  .clist{margin:0 0 14px;padding:0;list-style:none;}
+  .clist li{position:relative;padding:6px 0 6px 22px;font-size:13.5px;}
+  .clist li::before{content:"";position:absolute;left:0;top:13px;width:10px;height:10px;border-radius:3px;}
+  .clist.orange li::before{background:var(--orange);}
+  .clist.green li::before{background:var(--green);}
+  .clist.purple li::before{background:var(--purple);}
+  .clist.pink li::before{background:var(--pink);}
+  .clist.blue li::before{background:var(--blue);}
+  .clist.yellow li::before{background:var(--yellow);}
+
+  .screen{background:#2A2440;border-radius:14px;padding:16px;color:#E8E4F0;font-size:12px;line-height:1.7;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+  .screen-bar{display:flex;gap:5px;margin-bottom:12px;}
+  .screen-bar i{width:9px;height:9px;border-radius:50%;display:block;}
+  .screen-bar i:nth-child(1){background:#FF6B6B;}
+  .screen-bar i:nth-child(2){background:#FFD93D;}
+  .screen-bar i:nth-child(3){background:#6BCB77;}
+  .screen-row{display:flex;gap:10px;}
+  .screen-side{flex:none;width:72px;font-size:11px;color:#B5AED0;border-right:1px solid rgba(255,255,255,.1);padding-right:8px;}
+  .screen-side div{padding:3px 0;}
+  .screen-main{flex:1;}
+  .screen-main div{margin-bottom:8px;}
+  .screen-main div:last-child{margin-bottom:0;}
+  .chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10.5px;margin:0 3px 4px 0;background:rgba(255,255,255,.10);}
+  .chip.o{background:rgba(255,122,69,.25);color:#FFB088;}
+  .chip.g{background:rgba(76,175,110,.25);color:#9CE4B0;}
+  .chip.p{background:rgba(155,123,216,.30);color:#CDB6F5;}
+  .chip.y{background:rgba(255,194,75,.28);color:#FFE39C;}
+  .collab{margin-top:12px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.15);display:flex;flex-wrap:wrap;gap:5px;}
+
+  .examples{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;}
+  .ex{flex:1;min-width:120px;text-align:center;background:rgba(255,194,75,.05);border:1px solid var(--line);border-radius:12px;padding:10px;}
+  .ex .en-t{font-size:13px;font-weight:800;}
+  .ex .en-s{font-size:11px;color:var(--ink-soft);margin-top:2px;}
+
+  .foot{text-align:center;color:var(--ink-soft);font-size:12px;padding:18px 10px;line-height:1.8;}
+  .foot strong{color:var(--ink);}
+  .divider{height:1px;background:var(--line);margin:14px 0;}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="cover">
+<span class="cover-eyebrow">CLI TOOL · COCOS CREATOR 3.7.x</span>    <h1>cocoscli<br>命令行工具</h1>
+<p>一条命令，搞定 Cocos 工程的<br>安装 / 打开 / 构建 / 验证 / 编译</p>    <div class="cover-tags">
+<span class="tag">TypeScript CLI</span><span class="tag">CocosMCP 集成</span><span class="tag">AI 友好</span>    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#what">是什么</a>
+    <a href="#concept">核心理念</a>
+    <a href="#commands">七大命令</a>
+    <a href="#power">核心能力</a>
+    <a href="#flow">工作流</a>
+    <a href="#arch">架构栈</a>
+  </nav>
+
+  <section class="card" id="what">
+    <div class="card-head">
+      <div class="badge orange">01</div>
+      <div>
+        <h2 class="card-title">这是什么</h2>
+<div class="card-sub">What it is</div>      </div>
+    </div>
+
+
+        <p class="lead">cocoscli 是面向 Cocos Creator 3.7.x 的<mark>命令行工具</mark>。它把 CocosMCP（编辑器扩展）的能力封装成 <mark>7 条 CLI 命令</mark>，让 AI 和开发者不用再手动点编辑器，<mark>一条命令</mark>就能完成装扩展、开工程、构建打包、预览验证、编译检查。</p>
+
+
+
+        <div class="split">
+          <div class="split-item orange">
+            <h4><span class="dot orange"></span>以前手动操作</h4>
+            <p>重复点编辑器菜单、手动装扩展、手动拷 mcp 配置、构建出错靠肉眼看日志、预览要自己开浏览器盯 console。</p>
+          </div>
+          <div class="split-item blue">
+            <h4><span class="dot blue"></span>现在 cocoscli</h4>
+            <p>一条命令跑通全流程，配置自动写好，编译检查自动出 log，预览验证带 30 秒超时兜底，环境不对精准报错。</p>
+          </div>
+        </div>
+
+
+  </section>
+  <section class="card" id="concept">
+    <div class="card-head">
+      <div class="badge purple">02</div>
+      <div>
+        <h2 class="card-title">核心理念</h2>
+<div class="card-sub">Core idea</div>      </div>
+    </div>
+
+
+        <div class="quote">把编辑器里散落的操作，收敛成可复现、可脚本化的命令。</div>
+
+
+
+        <p class="lead">每条调 CocosMCP 的命令背后，都跑通同一套<mark>四条链路前置检查</mark>。环境没准备好不会默默失败，而是<mark>精准指出卡在哪一步</mark>，让报错指向问题根因。</p>
+
+
+
+        <ul class="clist purple">
+<li>CocosMCP 已装（extensions/CocosMCP 存在）</li><li>CocosMCP 已 build（dist/tools/&lt;tool&gt;.js 存在）</li><li>MCP HTTP server 在跑（verifyMcpConnection）</li><li>目标工具可用（调一次看响应结构）</li>        </ul>
+
+
+  </section>
+  <section class="card" id="commands">
+    <div class="card-head">
+      <div class="badge green">03</div>
+      <div>
+        <h2 class="card-title">七大命令</h2>
+<div class="card-sub">Seven commands</div>      </div>
+    </div>
+
+
+        <div class="grid2">
+          <div class="pro">
+            <div class="pro-no" style="background:var(--orange);">01</div>
+            <h5>cocoscli init</h5>
+            <p>装 CocosMCP + build + 写 mcp-server.json / opencode.json + 打开工程，默认免登录。</p>
+          </div>
+          <div class="pro">
+            <div class="pro-no" style="background:var(--blue);">02</div>
+            <h5>cocoscli open / close</h5>
+            <p>打开或关闭工程；已开则跳过，close 精准杀对应 CocosCreator 进程。</p>
+          </div>
+          <div class="pro">
+            <div class="pro-no" style="background:var(--pink);">03</div>
+            <h5>cocoscli remove</h5>
+            <p>卸载 CocosMCP：关工程 + 删扩展 + 清配置，一步干净。</p>
+          </div>
+          <div class="pro">
+            <div class="pro-no" style="background:var(--purple);">04</div>
+            <h5>cocoscli build &lt;platform&gt;</h5>
+            <p>构建打包到 web-desktop / wechat / douyin 等指定平台。</p>
+          </div>
+          <div class="pro">
+            <div class="pro-no" style="background:var(--green);">05</div>
+            <h5>cocoscli verify &lt;scene&gt;</h5>
+            <p>验证：编译检查 + MCP/preview + opencode 预览场景，事件流监控。</p>
+          </div>
+          <div class="pro">
+            <div class="pro-no" style="background:var(--yellow);color:#7A5A00;">06</div>
+            <h5>cocoscli compile</h5>
+            <p>编译检查（run_script_diagnostics）+ 生成 log，快速定位脚本错误。</p>
+          </div>
+        </div>
+
+
+  </section>
+  <section class="card" id="power">
+    <div class="card-head">
+      <div class="badge pink">04</div>
+      <div>
+        <h2 class="card-title">核心能力</h2>
+<div class="card-sub">迁移自 CocosMCP</div>      </div>
+    </div>
+
+
+        <div class="dir">
+          <div class="dir-top" style="background:var(--orange);"></div>
+          <div class="dir-body">
+            <h5>编译检查</h5>
+            <p>调 cocos-mcp 的 run_script_diagnostics，扫脚本错误并生成 log，不用开编辑器就能查。</p>
+          </div>
+        </div>
+        <div class="dir">
+          <div class="dir-top" style="background:var(--purple);"></div>
+          <div class="dir-body">
+            <h5>预览场景</h5>
+            <p>MCP/preview + opencode 事件流监控，切场景加 30 秒超时兜底，避免一直挂着等。</p>
+          </div>
+        </div>
+        <div class="dir">
+          <div class="dir-top" style="background:var(--green);"></div>
+          <div class="dir-body">
+            <h5>读浏览器日志</h5>
+            <p>经 cdp-cli 桥接 Chrome DevTools Protocol，拿预览页面的 console 输出。</p>
+          </div>
+        </div>
+        <div class="dir">
+          <div class="dir-top" style="background:var(--blue);"></div>
+          <div class="dir-body">
+            <h5>场景与资源操作</h5>
+            <p>经 CocosMCP 暴露的 HTTP 端点操作场景节点、组件、预制体与资源。</p>
+          </div>
+        </div>
+
+
+  </section>
+  <section class="card" id="flow">
+    <div class="card-head">
+      <div class="badge blue">05</div>
+      <div>
+        <h2 class="card-title">工作流</h2>
+<div class="card-sub">从初始化到发版</div>      </div>
+    </div>
+
+
+        <div class="flow">
+            <div class="flow-step">
+              <div class="flow-ico" style="background:var(--yellow);color:#7A5A00;">装</div>
+              <div><p class="ft">初始化</p><p class="fs">cocoscli init<br>装扩展 + 写配置 + 打开</p></div>
+            </div>
+<div class="flow-arrow">&#9660;</div>            <div class="flow-step">
+              <div class="flow-ico" style="background:var(--orange);">验</div>
+              <div><p class="ft">日常迭代</p><p class="fs">compile 检查 / verify 验证<br>open 开工程，反复跑</p></div>
+            </div>
+<div class="flow-arrow">&#9660;</div>          <div class="flow-split">
+            <div class="flow-step">
+              <div class="flow-ico" style="background:var(--green);">打</div>
+              <div><p class="ft">发版打包</p><p class="fs">cocoscli build platform<br>输出各平台产物</p></div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-ico" style="background:var(--pink);">卸</div>
+              <div><p class="ft">清理卸载</p><p class="fs">cocoscli remove<br>关工程 + 删扩展 + 清配置</p></div>
+            </div>
+          </div>
+        </div>
+
+
+
+        <p class="lead">想接入 CocosMCP 的新能力？<mark>统一四步</mark>：读 SKILL 摸清端点，加 HTTP 函数，加命令，注册命令。新命令自动复用同一套<mark>四条链路前置检查</mark>。</p>
+
+
+
+        <ul class="clist blue">
+<li>读 SKILL：.opencode/skills/&lt;skill&gt;/SKILL.md 摸端点 / 参数 / 返回</li><li>加函数：utils/verify.ts 复用 httpPostJson / verifyMcpConnection</li><li>加命令：commands/ 里四条链路 + 调用 + 输出</li><li>注册：index.ts 用 commander 挂上</li>        </ul>
+
+
+  </section>
+  <section class="card" id="arch">
+    <div class="card-head">
+      <div class="badge yellow">06</div>
+      <div>
+        <h2 class="card-title">架构与技术栈</h2>
+<div class="card-sub">Structure &amp; stack</div>      </div>
+    </div>
+
+
+        <p class="lead">源码结构清晰，命令入口与工具函数分离，单测覆盖核心路径：</p>
+
+
+
+        <div class="screen">
+          <div class="screen-bar"><i></i><i></i><i></i></div>
+          <div class="screen-row">
+            <div class="screen-side">
+              <div>&#9656; src</div>
+              <div>&nbsp;&nbsp;index.ts</div>
+              <div>&nbsp;&nbsp;commands</div>
+              <div>&nbsp;&nbsp;utils</div>
+              <div>&nbsp;&nbsp;__tests__</div>
+            </div>
+            <div class="screen-main">
+              <div style="color:#9CE4B0;">【index.ts】commander 注册 7 条命令，全局 option 分发</div>
+              <div style="color:#FFB088;">【commands】init / open / close / remove / build / verify / compile</div>
+              <div style="color:#CDB6F5;">【utils】cocos 5 级查找 / 进程查杀 / git / build / verify / spinner</div>
+              <div style="color:#9CD0F5;">【__tests__】vitest 单元测试，覆盖核心路径</div>
+            </div>
+          </div>
+          <div class="collab">
+            <span class="chip o">TypeScript</span>
+            <span class="chip y">ESM</span>
+            <span class="chip g">commander</span>
+            <span class="chip p">vitest</span>
+            <span class="chip">Node 大于等于 20.19</span>
+          </div>
+        </div>
+
+
+
+        <div class="fit-row" style="margin-top:0;">
+              <span class="tag orange">TypeScript ESM</span>
+              <span class="tag blue">commander</span>
+              <span class="tag green">chalk / ora</span>
+              <span class="tag purple">vitest</span>
+              <span class="tag pink">ws / yargs</span>
+        </div>
+
+
+  </section>
+
+  <footer class="foot">
+<div>来源：项目 CLAUDE.md 与 package.json</div><div>cocoscli v0.0.1 · MIT · 面向 Cocos Creator 3.7.x</div><div>本页为项目图文介绍页，内容据项目文档整理</div><div class="divider"></div><div>一条命令，搞定 Cocos 工程</div>  </footer>
+
+</div>
+</body>
+</html>
