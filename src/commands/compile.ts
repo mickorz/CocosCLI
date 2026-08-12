@@ -2,7 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
-import { runScriptDiagnosticsViaMcp, readMcpPort, verifyMcpConnection } from '../utils/verify.js';
+import {
+  runScriptDiagnosticsViaMcp,
+  readMcpPort,
+  verifyMcpConnection,
+  ensureVerifyTsconfig,
+  classifyDiagnostics,
+  ScriptDiagnostic,
+} from '../utils/verify.js';
 import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
 
 // compile 命令：调 cocos-mcp run_script_diagnostics 做编译检查，生成 log
@@ -58,38 +65,82 @@ export async function compile(projectDir?: string): Promise<void> {
   }
   console.log(chalk.gray(`[检查3] CocosMCP HTTP server 可访问（${mcpPort}）`));
 
-  // 检查4：run_script_diagnostics 工具可用（同时拿编译结果）
-  const diag = await runScriptDiagnosticsViaMcp(mcpPort);
+  // 检查4：构造 verify tsconfig（让 tsc 真正检查 assets，避免默认 temp/tsconfig.cocos.json
+  //       无 include 字段导致只编译 temp/ 而漏检 assets 脚本错误）
+  const tsconfigSetup = ensureVerifyTsconfig(dir);
+  if (!tsconfigSetup.written) {
+    // written=false：temp/tsconfig.cocos.json 不存在。若工程根也无 tsconfig.json，cocos-mcp 的
+    // findTsConfig 会返回空 → tsc 跑空 → error=0 假阳性。这里直接拦截，提示开编辑器生成 temp/
+    const rootTsconfig = path.join(dir, 'tsconfig.json');
+    if (!fs.existsSync(rootTsconfig)) {
+      console.log(chalk.red(`[检查4] ${tsconfigSetup.reason}`));
+      console.log(chalk.gray('  且工程根无 tsconfig.json，无法编译检查。请先 cocoscli open 打开 CocosCreator 让它生成 temp/tsconfig.cocos.json。'));
+      process.exit(1);
+    }
+    console.log(chalk.yellow(`[检查4] ${tsconfigSetup.reason}，改用工程根 tsconfig.json`));
+  } else {
+    console.log(chalk.gray(`[检查4] verify tsconfig 已生成：${tsconfigSetup.tsconfigPath}`));
+  }
+  const tsconfigArg = tsconfigSetup.written ? tsconfigSetup.tsconfigPath : undefined;
+
+  // 检查5：run_script_diagnostics 工具可用（同时拿编译结果）
+  const diag = await runScriptDiagnosticsViaMcp(mcpPort, tsconfigArg);
   if (!diag.ran) {
-    console.log(chalk.red('[检查4] run_script_diagnostics 工具不可用'));
+    console.log(chalk.red('[检查5] run_script_diagnostics 工具不可用'));
     console.log(chalk.gray('  CocosMCP 可能没移植 run_script_diagnostics，或 CocosCreator 需重启加载新 CocosMCP。'));
     process.exit(1);
   }
-  console.log(chalk.gray('[检查4] run_script_diagnostics 可用\n'));
+  console.log(chalk.gray('[检查5] run_script_diagnostics 可用\n'));
 
-  // 写 log 文件（JSON 格式 + 时间戳 + snippet，通过共用 writeCompileLog）
+  // 降噪分类（层1 明确规则 + 层2 频次阈值，折叠第三方库声明噪音）
+  const classified = classifyDiagnostics(diag.errors);
+  // snippet：cocos-mcp 已自带就优先用，没有则读文件兜底
+  const withSnippet = (e: ScriptDiagnostic) => ({
+    ...e,
+    snippet: e.snippet && e.snippet.length > 0 ? e.snippet : readSnippet(path.join(dir, e.file), e.line),
+  });
+
+  // 展示 real（真实 error，逐条；分类计数：语法 + 类型）
+  if (classified.real.length === 0) {
+    console.log(chalk.green('无真实 error'));
+  } else {
+    console.log(
+      chalk.red(
+        `发现 ${classified.real.length} 个真实 error（语法 ${classified.syntacticCount} + 类型 ${classified.semanticCount}）：`
+      )
+    );
+    classified.real.forEach((e) => {
+      console.log(chalk.gray(`  ${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`));
+    });
+  }
+
+  // 展示 noise 摘要（折叠的第三方库声明噪音，编辑器不报/运行时正常）
+  if (classified.noise.length > 0) {
+    console.log(chalk.yellow(`\n[已折叠 ${classified.noise.length} 条声明噪音（编辑器不报/运行时正常，详见 log）]`));
+    const codeEntries = Object.entries(classified.noiseSummary.byCode).sort((a, b) => b[1] - a[1]);
+    codeEntries.forEach(([code, n]) => console.log(chalk.gray(`  ${code}: ${n}`)));
+    const typeEntries = Object.entries(classified.noiseSummary.byType).sort((a, b) => b[1] - a[1]);
+    if (typeEntries.length > 0) {
+      console.log(chalk.gray(`  属性不存在高频类型 top10（共 ${typeEntries.length} 个）：`));
+      typeEntries.slice(0, 10).forEach(([t, n]) => console.log(chalk.gray(`    ${t}: ${n}`)));
+    }
+    console.log(chalk.gray('  规则：TS2307 非相对路径(含 @/ alias)、TS2304 首字母大写名、TS2339/TS2551 同 type>5 归 noise'));
+    console.log(chalk.gray('  注：基于规则启发式可能误判，完整列表见 log JSON 的 noise 字段'));
+  }
+
+  // 写 log（real 全量 + noise 全量 + 摘要，方便事后查误判）
   const logData = {
     command: 'cocoscli compile',
     project: dir,
     timestamp: new Date().toISOString(),
     mcpPort,
-    ok: diag.errors.length === 0,
-    errorCount: diag.errors.length,
-    errors: diag.errors.map((e) => ({
-      ...e,
-      snippet: readSnippet(path.join(dir, e.file), e.line),
-    })),
+    tsconfigPath: tsconfigSetup.tsconfigPath || null,
+    ok: classified.real.length === 0,
+    errorCount: classified.real.length,
+    errors: classified.real.map(withSnippet),
+    noiseSummary: classified.noiseSummary,
+    noise: classified.noise.map(withSnippet),
   };
-
-  if (diag.errors.length === 0) {
-    console.log(chalk.green('无 error'));
-  } else {
-    console.log(chalk.red(`发现 ${diag.errors.length} 个 error：`));
-    diag.errors.forEach((e) => {
-      console.log(chalk.gray(`  ${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`));
-    });
-  }
-
   const logPath = writeCompileLog(dir, 'compile-log-', logData);
   console.log(chalk.green(`\n编译报告已写入：${logPath}`));
 }

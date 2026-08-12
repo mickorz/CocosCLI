@@ -182,6 +182,8 @@ export interface ScriptDiagnostic {
   column: number;
   code: string;
   message: string;
+  snippet?: string;  // cocos-mcp 已自带（error 行附近代码），优先用此字段
+  category?: 'syntactic' | 'semantic';  // Compiler API 天然分类（语法 / 语义）
 }
 
 /**
@@ -194,12 +196,15 @@ export interface ScriptDiagnostic {
  * @returns errors 诊断列表 / ran 是否成功调用（false 表示 cocos-mcp 不可用）
  */
 export async function runScriptDiagnosticsViaMcp(
-  mcpPort = 3001
+  mcpPort = 3001,
+  tsconfigPath?: string
 ): Promise<{ errors: ScriptDiagnostic[]; ran: boolean }> {
   // run_script_diagnostics 调编辑器内置 tsc 编译 assets，耗时较长（可能 >5 秒），timeout 给 60 秒
+  // tsconfigPath：传自定义 tsconfig（相对 projectPath），解决默认 temp/tsconfig.cocos.json
+  //   无 include 字段导致 tsc 不检查 assets 的问题（见 ensureVerifyTsconfig）
   const resp = await httpPostJson(
     `http://127.0.0.1:${mcpPort}/api/debug/run_script_diagnostics`,
-    {},
+    tsconfigPath ? { tsconfigPath } : {},
     60000
   );
   if (!resp) {
@@ -213,6 +218,199 @@ export async function runScriptDiagnosticsViaMcp(
   }
   const diagnostics = data.diagnostics as ScriptDiagnostic[];
   return { errors: diagnostics, ran: true };
+}
+
+// ==================== verify tsconfig 构造（让 tsc 真正检查 assets） ====================
+
+export interface VerifyTsconfigSetup {
+  tsconfigPath: string;  // 相对 projectPath 的 POSIX 串；written=false 时为 ''
+  written: boolean;
+  reason?: string;       // written=false 时的兜底说明
+}
+
+/**
+ * 在 .cocoscli/tsconfig.verify.json 构造临时 tsconfig，给 cocos-mcp run_script_diagnostics 用
+ *
+ * 背景：temp/tsconfig.cocos.json 没有 include 字段，tsc -p 它只编译 temp/ 下文件，不碰 assets，
+ *      导致 compile 检不出 assets 脚本错误。这里构造一个 extends 它 + 显式 include assets 的临时配置。
+ *
+ * 关键：
+ *   - 清空 types：原 tsconfig 的 types 用相对路径 './temp/declarations/cc'，命令行 tsc 按 tsconfig
+ *     所在目录解析会拼成 temp/temp/... 找不到，报 TS2688 让类型系统崩溃、跳过类型检查；
+ *     清空 types + 显式 include declarations 解决
+ *   - dts/ 是工程自有第三方库声明目录（存在才 include）
+ *
+ * @returns tsconfigPath 给 cocos-mcp findTsConfig join 用（POSIX 相对路径，跨平台一致）
+ *          written=false 表示 temp/tsconfig.cocos.json 不存在，调用方应拦截（避免假阳性）
+ */
+export function ensureVerifyTsconfig(projectPath: string): VerifyTsconfigSetup {
+  const cocosTsconfig = path.join(projectPath, 'temp', 'tsconfig.cocos.json');
+  if (!fs.existsSync(cocosTsconfig)) {
+    return {
+      tsconfigPath: '',
+      written: false,
+      reason: 'temp/tsconfig.cocos.json 不存在（编辑器未生成），无法构造 verify tsconfig',
+    };
+  }
+  const dtsDir = path.join(projectPath, 'dts');
+  const hasDts = fs.existsSync(dtsDir) && fs.statSync(dtsDir).isDirectory();
+
+  const include = ['../temp/declarations/**/*.d.ts'];
+  if (hasDts) include.push('../dts/**/*.d.ts');
+  include.push('../assets/**/*.ts');
+
+  const tsconfig = {
+    extends: '../temp/tsconfig.cocos.json',
+    compilerOptions: { types: [] },
+    include,
+  };
+
+  const verifyDir = path.join(projectPath, '.cocoscli');
+  fs.mkdirSync(verifyDir, { recursive: true });
+  const verifyTsconfig = path.join(verifyDir, 'tsconfig.verify.json');
+  fs.writeFileSync(verifyTsconfig, JSON.stringify(tsconfig, null, 2), 'utf-8');
+
+  // path.relative 动态生成，避免目录改名时不跟随；统一正斜杠跨平台
+  const rel = path.relative(projectPath, verifyTsconfig).replace(/\\/g, '/');
+  return { tsconfigPath: rel, written: true };
+}
+
+// ==================== 诊断降噪（折叠第三方库声明噪音） ====================
+
+export interface NoiseVerdict {
+  noise: boolean;
+  ns?: string;  // 归因（namespace / module / 全局名 / type），用于摘要
+}
+
+/**
+ * 单条降噪判定（层 1 明确规则，export 便于单测逐 code 覆盖）
+ *
+ * 归 noise：TS2503(找不到ns) / TS1192(无默认导出) / TS7006+TS7005(隐式any) /
+ *          TS2307(非相对模块) / TS2304(首字母大写的全局名)
+ * 归 real：TS2304(小写名，局部变量) / TS2307(相对路径) / 其他未列出 code
+ * 注：TS2339/TS2551（属性不存在）不在此处理，交给 classifyDiagnostics 的频次阈值法
+ */
+export function judgeNoise(e: ScriptDiagnostic): NoiseVerdict {
+  const msg = e.message;
+  switch (e.code) {
+    case 'TS2503': {  // Cannot find namespace 'gf'.
+      const m = msg.match(/^Cannot find namespace ['"]([^'"]+)['"]/);
+      return { noise: true, ns: m?.[1] };
+    }
+    case 'TS1192': {  // Module '"proto_cm_protocol"' has no default export.（message 是 '"x"' 双层引号，['"]+ 兼容）
+      const m = msg.match(/^Module ['"]+([^'"]+)['"]/);
+      return { noise: true, ns: m?.[1] };
+    }
+    case 'TS7006':    // Parameter implicitly any
+    case 'TS7005':    // Variable implicitly any
+      return { noise: true };
+    case 'TS2307': {  // Cannot find module 'gamePlatformModule' or its type declarations.
+      const m = msg.match(/^Cannot find module ['"]([^'"]+)['"]/);
+      const modPath = m?.[1] ?? '';
+      // 非相对路径（不以 . 开头，含 bare specifier / @/ alias）→ noise；相对路径(./xxx) → real
+      if (modPath && !modPath.startsWith('.')) {
+        return { noise: true, ns: modPath };
+      }
+      return { noise: false };
+    }
+    case 'TS2304': {  // Cannot find name 'RoomPlayerData'.
+      const m = msg.match(/^Cannot find name ['"]([^'"]+)['"]/);
+      const name = m?.[1] ?? '';
+      // 首字母大写（类型/全局类缺失）→ noise；小写（局部变量未定义）→ real
+      if (name && /^[A-Z]/.test(name)) {
+        return { noise: true, ns: name };
+      }
+      return { noise: false };
+    }
+    default:
+      return { noise: false };
+  }
+}
+
+export interface NoiseSummary {
+  total: number;
+  byCode: Record<string, number>;       // { TS2339: 9636, TS7006: 3954, ... }
+  byNamespace: Record<string, number>;  // 层1 明确规则的归因（namespace/module/全局名）
+  byType: Record<string, number>;       // 层2 频次噪音的 type（TS2339/TS2551 on type）
+}
+
+export interface ClassifiedDiagnostics {
+  real: ScriptDiagnostic[];
+  noise: ScriptDiagnostic[];
+  noiseSummary: NoiseSummary;
+  syntacticCount: number;  // real 里的语法错误数
+  semanticCount: number;   // real 里的语义（类型）错误数
+}
+
+/**
+ * 诊断分类：层1 judgeNoise 明确规则 + 层2 TS2339/TS2551 频次阈值
+ *
+ * 频次阈值：属性不存在类错误若同一 type 出现 > threshold 次，判为声明不全噪音
+ * （声明完整时同一类型不会有成片属性错误；testerror 的 Player(2 条) 等低频 type 自动归 real）
+ *
+ * 实测（game-mahjong 工程）：TS2339+TS2551 共 13010 条 → 噪音 12839 / real 171
+ *
+ * @param threshold 同一 type 超过此次数归 noise（默认 5）
+ */
+export function classifyDiagnostics(
+  errors: ScriptDiagnostic[],
+  threshold = 5
+): ClassifiedDiagnostics {
+  // 第一遍：层 1 明确规则（syntactic 错误不降噪，必须看）
+  const candidates: ScriptDiagnostic[] = [];
+  const noise: ScriptDiagnostic[] = [];
+  const byCode: Record<string, number> = {};
+  const byNamespace: Record<string, number> = {};
+  for (const e of errors) {
+    if (e.category === 'syntactic') {
+      candidates.push(e);  // 语法错误必须看，不降噪
+      continue;
+    }
+    const v = judgeNoise(e);
+    if (v.noise) {
+      noise.push(e);
+      byCode[e.code] = (byCode[e.code] || 0) + 1;
+      if (v.ns) byNamespace[v.ns] = (byNamespace[v.ns] || 0) + 1;
+    } else {
+      candidates.push(e);
+    }
+  }
+
+  // 第二遍：候选里的 TS2339/TS2551 按 on type 频次
+  const typeOf = (e: ScriptDiagnostic): string => {
+    const m = e.message.match(/on type ['"]([^'"]+)['"]/);
+    return m?.[1] ?? '';
+  };
+  const freq: Record<string, number> = {};
+  for (const e of candidates) {
+    if (e.code === 'TS2339' || e.code === 'TS2551') {
+      const t = typeOf(e);
+      if (t) freq[t] = (freq[t] || 0) + 1;
+    }
+  }
+  const byType: Record<string, number> = {};
+  const real: ScriptDiagnostic[] = [];
+  for (const e of candidates) {
+    if (e.code === 'TS2339' || e.code === 'TS2551') {
+      const t = typeOf(e);
+      if (t && (freq[t] || 0) > threshold) {
+        noise.push(e);
+        byCode[e.code] = (byCode[e.code] || 0) + 1;
+        byType[t] = (byType[t] || 0) + 1;
+        continue;
+      }
+    }
+    real.push(e);
+  }
+
+  const syntacticCount = real.filter((e) => e.category === 'syntactic').length;
+  return {
+    real,
+    noise,
+    noiseSummary: { total: noise.length, byCode, byNamespace, byType },
+    syntacticCount,
+    semanticCount: real.length - syntacticCount,
+  };
 }
 
 /**
@@ -335,7 +533,7 @@ export type SceneOpenResult = 'success' | 'timeout' | 'failed';
 export async function sceneManagementOpen(
   mcpPort: number,
   scenePath: string,
-  timeoutMs = 30000
+  timeoutMs = 10000
 ): Promise<SceneOpenResult> {
   const resp = await Promise.race([
     httpPostJson(

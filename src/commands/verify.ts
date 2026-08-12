@@ -11,6 +11,10 @@ import {
   readMcpPort,
   resolveOpencodePath,
   runOpencodeMonitored,
+  ensureVerifyTsconfig,
+  classifyDiagnostics,
+  ClassifiedDiagnostics,
+  ScriptDiagnostic,
   OpencodeResult,
 } from '../utils/verify.js';
 import { findCocosProcesses, isProjectMatch } from '../utils/process.js';
@@ -107,33 +111,66 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
   console.log(chalk.gray(`  CocosMCP ${mcpReady ? '已就绪' : '未就绪（超时，后续 MCP 验证可能失败）'}`));
 
   // 第2步：编译检查 + 自动修复循环（调 cocos-mcp run_script_diagnostics，用编辑器内置 tsc）
+  // 降噪后只把 real 喂给 opencode（避免 2 万第三方库声明噪音灌爆修复循环）
   console.log(chalk.blue('\n第2步 编译检查（cocos-mcp run_script_diagnostics，含自动修复循环，最多 3 轮）'));
+  const tsconfigSetup = ensureVerifyTsconfig(dir);
+  if (tsconfigSetup.written) {
+    console.log(chalk.gray(`  verify tsconfig：${tsconfigSetup.tsconfigPath}`));
+  } else {
+    console.log(chalk.gray(`  ${tsconfigSetup.reason}（用默认 tsconfig）`));
+  }
+  const tsconfigArg = tsconfigSetup.written ? tsconfigSetup.tsconfigPath : undefined;
   console.log(chalk.gray('  正在编译检查（编辑器 tsc，大工程可能几十秒）...'));
-  let diag = await runScriptDiagnosticsViaMcp(mcpPort);
+  let diag = await runScriptDiagnosticsViaMcp(mcpPort, tsconfigArg);
   if (!diag.ran) {
     console.log(chalk.gray('  cocos-mcp run_script_diagnostics 不可用，跳过'));
     report.push('## 第2步 编译检查', '- cocos-mcp run_script_diagnostics 不可用，跳过', '');
   } else {
     let round = 0;
     const maxRounds = 3;
-    while (diag.errors.length > 0 && round < maxRounds) {
-      round++;
-      // 留存本轮编译 log（JSON + snippet，追溯修复过程）
-      writeCompileLog(dir, `verify-compile-round-${round}-`, {
+    let classified = classifyDiagnostics(diag.errors);
+    // snippet：cocos-mcp 已自带就优先用，没有则读文件兜底
+    const withSnippet = (e: ScriptDiagnostic) => ({
+      ...e,
+      snippet: e.snippet && e.snippet.length > 0 ? e.snippet : readSnippet(path.join(dir, e.file), e.line),
+    });
+    // 写编译 log：中间轮只记 noiseSummary + topNs（不展开 noise 数组，避免 3 轮×2 万×snippet 写爆磁盘）；
+    // fullNoise=true（仅 final log）才展开完整 noise 数组，方便事后查误判
+    const persistLog = (
+      prefix: string,
+      r: number | string,
+      c: ClassifiedDiagnostics,
+      fullNoise: boolean
+    ) => {
+      writeCompileLog(dir, prefix, {
         source: 'verify',
-        round,
+        round: r,
         timestamp: new Date().toISOString(),
-        errorCount: diag.errors.length,
-        errors: diag.errors.map((e) => ({
-          ...e,
-          snippet: readSnippet(path.join(dir, e.file), e.line),
-        })),
+        errorCount: c.real.length,
+        noiseCount: c.noise.length,
+        noiseSummary: c.noiseSummary,
+        noiseTopNs: Object.entries(c.noiseSummary.byNamespace)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 20)
+          .map(([ns, n]) => ({ ns, count: n })),
+        errors: c.real.map(withSnippet),
+        ...(fullNoise ? { noise: c.noise.map(withSnippet) } : {}),
       });
-      console.log(chalk.yellow(`\n  第 ${round} 轮：发现 ${diag.errors.length} 个 error，调 opencode 修复`));
-      diag.errors.forEach((e) =>
+    };
+    // 循环条件基于 real.length（否则 2 万 noise 永远进循环）
+    while (classified.real.length > 0 && round < maxRounds) {
+      round++;
+      persistLog(`verify-compile-round-${round}-`, round, classified, false);
+      console.log(
+        chalk.yellow(
+          `\n  第 ${round} 轮：${classified.real.length} 个真实 error（语法 ${classified.syntacticCount} + 类型 ${classified.semanticCount}，已折叠 ${classified.noise.length} 条噪音），调 opencode 修复`
+        )
+      );
+      classified.real.forEach((e) =>
         console.log(chalk.gray(`    ${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`))
       );
-      const errorList = diag.errors
+      // 只把 real 喂给 opencode（noise 不喂，避免修复噪音引入新问题）
+      const errorList = classified.real
         .map((e) => `${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`)
         .join('\n');
       const fixPrompt = `请修复以下 TypeScript 编译 error，只做必要的最小修改，不要改无关代码：\n${errorList}`;
@@ -146,31 +183,34 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
         break;
       }
       console.log(chalk.gray('  修复完成，重跑编译检查...'));
-      diag = await runScriptDiagnosticsViaMcp(mcpPort);
+      diag = await runScriptDiagnosticsViaMcp(mcpPort, tsconfigArg);
+      classified = classifyDiagnostics(diag.errors);
     }
-    // 留存最终编译 log
-    writeCompileLog(dir, 'verify-compile-final-', {
-      source: 'verify',
-      round: 'final',
-      timestamp: new Date().toISOString(),
-      errorCount: diag.errors.length,
-      errors: diag.errors.map((e) => ({
-        ...e,
-        snippet: readSnippet(path.join(dir, e.file), e.line),
-      })),
-    });
-    if (diag.errors.length === 0) {
+    // 最终 log（noise 完整保留，可追溯误判）
+    persistLog('verify-compile-final-', 'final', classified, true);
+    if (classified.real.length === 0) {
       const note = round > 0 ? `（经 ${round} 轮修复）` : '';
-      console.log(chalk.green(`  无 error${note}`));
-      report.push('## 第2步 编译检查', `- 无 error${note}`, '');
+      console.log(chalk.green(`  无真实 error${note}`));
+      report.push('## 第2步 编译检查', `- 无真实 error${note}`, '');
     } else {
-      console.log(chalk.red(`  仍有 ${diag.errors.length} 个 error（${round} 轮修复后）：`));
-      report.push('## 第2步 编译检查', `- 仍有 ${diag.errors.length} 个 error（${round} 轮修复后）：`, '');
-      diag.errors.forEach((e) => {
+      console.log(chalk.red(`  仍有 ${classified.real.length} 个真实 error（${round} 轮修复后）：`));
+      report.push('## 第2步 编译检查', `- 仍有 ${classified.real.length} 个真实 error（${round} 轮修复后）：`, '');
+      classified.real.forEach((e) => {
         const line = `${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`;
         console.log(chalk.gray(`    ${line}`));
         report.push(`- ${line}`);
       });
+      report.push('');
+    }
+    // noise 摘要进报告（一行，不展开）
+    if (classified.noise.length > 0) {
+      const top = Object.entries(classified.noiseSummary.byCode)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([c, n]) => `${c}(${n})`)
+        .join(', ');
+      console.log(chalk.gray(`  已折叠 ${classified.noise.length} 条噪音（top: ${top}），详见 log`));
+      report.push(`- 噪音：已折叠 ${classified.noise.length} 条（top: ${top}），详见 verify-compile-final log`);
       report.push('');
     }
   }
