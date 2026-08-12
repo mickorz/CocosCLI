@@ -261,9 +261,17 @@ export function ensureVerifyTsconfig(projectPath: string): VerifyTsconfigSetup {
 
   const tsconfig = {
     extends: '../temp/tsconfig.cocos.json',
-    // skipLibCheck:true 跳过所有 .d.ts 语义检查，避免引擎 @types（jsb.d.ts 等）/ 生成声明
-    // 产生 TS7010 等噪音；与 diagnostics.ts toDiagnosticItem 的「工程外文件丢弃」双保险
-    compilerOptions: { types: [], skipLibCheck: true },
+    compilerOptions: {
+      types: [],
+      skipLibCheck: true, // 跳过 .d.ts 语义检查，避免引擎 @types（jsb.d.ts 等）声明噪音
+      // 还原 Cocos biz_modules / node_modules 的 *Module 裸模块别名
+      // 编辑器用 cc 模块系统认这些别名，纯 tsc 不认 → import 解析失败 → TS2307/TS2503/TS2339 连锁
+      baseUrl: '.',
+      paths: {
+        '*Module': ['../assets/biz_modules/*Module', '../assets/node_modules/*Module'],
+        '*Module/*': ['../assets/biz_modules/*Module/*', '../assets/node_modules/*Module/*'],
+      },
+    },
     include,
   };
 
