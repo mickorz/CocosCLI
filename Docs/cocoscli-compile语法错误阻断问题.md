@@ -122,3 +122,36 @@ Compiler API 一次拿到 01 的语法错误 + 02-06 的全部类型错误。对
 
 - TypeScript Compiler API：https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API
 - tsc CLI 短路逻辑（emitFilesAndReportErrors）：https://github.com/microsoft/TypeScript/blob/main/src/compiler/watch.ts
+
+## 十、工程外声明噪音过滤（2026-08-12 补）
+
+### 问题
+
+Compiler API 改完后，compile 的 errors 里仍有大量**工程外文件**，典型：
+
+    D:/CocosSofts/Creator/3.7.3/resources/resources/3d/engine/@types/jsb.d.ts
+
+这些是 CocosCreator 安装目录下的引擎 @types 声明（jsb.d.ts 等），报 TS7010（隐式 any 返回值）等，直接进了 real errors（不是 noise），把真实错误数灌到 652。
+
+### 根因
+
+toDiagnosticItem 的过滤只挡了工程内的副本/依赖：
+
+    const relPath = path.relative(projectPath, absPath).replace(/\\/g, '/');
+    if (relPath.includes('/node_modules/') || relPath.includes('/extensions/')) return null;
+
+jsb.d.ts 在 D: 盘，工程在 E: 盘，**跨盘符**。Windows 下跨盘符时 `path.relative` 无法相对化，返回的是绝对路径 `D:/CocosSofts/.../jsb.d.ts`，既不含 `/node_modules/` 也不含 `/extensions/`，两个 includes 都不命中，漏网。
+
+### 修复（双保险）
+
+1. **源头过滤（cocos-mcp diagnostics.ts toDiagnosticItem）**：工程外文件直接丢弃，一刀切
+
+       const relPathRaw = path.relative(projectPath, absPath);
+       // 跨盘符(path.relative 返回绝对路径) 或 向上跳出工程(以 .. 开头) → 工程外
+       if (path.isAbsolute(relPathRaw) || relPathRaw.startsWith('..')) return null;
+
+2. **降噪源头（cocoscli ensureVerifyTsconfig）**：tsconfig.verify.json 加 `skipLibCheck: true`，让 TS 跳过所有 .d.ts 语义检查，引擎 @types / 生成声明不再产生 TS7010 等噪音（toDiagnosticItem 已挡工程外，skipLibCheck 是源头少产生诊断 + 提速）。
+
+### 类比
+
+toDiagnosticItem 是门卫。原来只查「穿 node_modules / extensions 制服的」，结果「外单位的人（跨盘符的 jsb.d.ts）」穿便装混进来了。现在改成「非本楼（工程目录外）的一律不放行」，再加「门口安检 skipLibCheck 让穿 .d.ts 马甲的不产生警报」。

@@ -261,7 +261,9 @@ export function ensureVerifyTsconfig(projectPath: string): VerifyTsconfigSetup {
 
   const tsconfig = {
     extends: '../temp/tsconfig.cocos.json',
-    compilerOptions: { types: [] },
+    // skipLibCheck:true 跳过所有 .d.ts 语义检查，避免引擎 @types（jsb.d.ts 等）/ 生成声明
+    // 产生 TS7010 等噪音；与 diagnostics.ts toDiagnosticItem 的「工程外文件丢弃」双保险
+    compilerOptions: { types: [], skipLibCheck: true },
     include,
   };
 
