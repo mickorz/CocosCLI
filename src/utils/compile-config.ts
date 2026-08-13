@@ -28,6 +28,14 @@ export interface CompileConfig {
    * false 时对齐编辑器（务实工头视角，关 strict）。默认 false。
    */
   strict?: boolean;
+
+  /**
+   * 排除路径前缀数组（相对工程根，正斜杠，如 "assets/biz_modules"）：
+   * file 以这些前缀开头的诊断不计入 real/noise，归 excluded（如第三方/子模块目录）。
+   * 匹配按目录前缀（"assets/biz_modules" 匹配其下所有文件，不误伤 "assets/biz_modules_other"）。
+   * 默认空（不排除）。
+   */
+  excludePath?: string[];
 }
 
 /** 默认配置（工头视角：关 strict） */
@@ -61,4 +69,36 @@ export function readCompileConfig(projectPath: string): CompileConfig {
   const content = fs.readFileSync(configPath, 'utf-8');
   const parsed = JSON.parse(content) as Partial<CompileConfig>;
   return { ...DEFAULT_COMPILE_CONFIG, ...parsed };
+}
+
+/**
+ * 按 excludePath 前缀过滤诊断：file 以任一前缀开头的项排除
+ *
+ * 匹配规则（目录前缀，避免误伤同名目录）：
+ *   - 规范化前缀：转正斜杠、去前导 ./ 和 /、去尾 /
+ *   - file === 前缀（精确文件）或 file 以前缀 + '/' 开头（目录下）
+ *   - 例：excludePath "assets/biz_modules" 排除 "assets/biz_modules/a.ts"，不排除 "assets/biz_modules_other/b.ts"
+ *
+ * @param items 诊断数组（只要有 file 字段）
+ * @param excludePath 配置的排除前缀
+ * @returns kept 保留的；excluded 被排除的数量
+ */
+export function filterExcludePath<T extends { file: string }>(
+  items: T[],
+  excludePath?: string[]
+): { kept: T[]; excluded: number } {
+  if (!excludePath || excludePath.length === 0) {
+    return { kept: items, excluded: 0 };
+  }
+  const norms = excludePath.map((p) =>
+    p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, '')
+  );
+  let excluded = 0;
+  const kept = items.filter((item) => {
+    const f = item.file.replace(/\\/g, '/');
+    const isExcluded = norms.some((p) => f === p || f.startsWith(p + '/'));
+    if (isExcluded) excluded++;
+    return !isExcluded;
+  });
+  return { kept, excluded };
 }

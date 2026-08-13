@@ -11,7 +11,7 @@ import {
   ScriptDiagnostic,
 } from '../utils/verify.js';
 import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
-import { readCompileConfig, type CompileConfig } from '../utils/compile-config.js';
+import { readCompileConfig, filterExcludePath, type CompileConfig } from '../utils/compile-config.js';
 
 // compile 命令：调 cocos-mcp run_script_diagnostics 做编译检查，生成 log
 //
@@ -105,8 +105,10 @@ export async function compile(projectDir?: string): Promise<void> {
   }
   console.log(chalk.gray('[检查5] run_script_diagnostics 可用\n'));
 
+  // excludePath 过滤：配置里 excludePath 前缀匹配的 file 排除（如 assets/biz_modules 第三方/子模块目录）
+  const { kept: filteredErrors, excluded: excludedCount } = filterExcludePath(diag.errors, config.excludePath);
   // 降噪分类（层1 明确规则 + 层2 频次阈值，折叠第三方库声明噪音）
-  const classified = classifyDiagnostics(diag.errors);
+  const classified = classifyDiagnostics(filteredErrors);
   // snippet：cocos-mcp 已自带就优先用，没有则读文件兜底
   const withSnippet = (e: ScriptDiagnostic) => ({
     ...e,
@@ -141,6 +143,11 @@ export async function compile(projectDir?: string): Promise<void> {
     console.log(chalk.gray('  注：基于规则启发式可能误判，完整列表见 log JSON 的 noise 字段'));
   }
 
+  // 展示 excluded（excludePath 排除的，不计 real/noise）
+  if (excludedCount > 0) {
+    console.log(chalk.gray(`\n[已排除 ${excludedCount} 条 excludePath 匹配（${(config.excludePath ?? []).join(', ')}），不计 real/noise，详见 log]`));
+  }
+
   // 写 log（real 全量 + noise 全量 + 摘要，方便事后查误判）
   const logData = {
     command: 'cocoscli compile',
@@ -150,6 +157,8 @@ export async function compile(projectDir?: string): Promise<void> {
     tsconfigPath: tsconfigSetup.tsconfigPath || null,
     ok: classified.real.length === 0,
     errorCount: classified.real.length,
+    excludedCount,
+    excludedPaths: config.excludePath ?? [],
     errors: classified.real.map(withSnippet),
     noiseSummary: classified.noiseSummary,
     noise: classified.noise.map(withSnippet),

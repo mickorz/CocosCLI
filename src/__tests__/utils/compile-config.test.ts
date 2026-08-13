@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { readCompileConfig, DEFAULT_COMPILE_CONFIG } from '../../utils/compile-config.js';
+import { readCompileConfig, DEFAULT_COMPILE_CONFIG, filterExcludePath } from '../../utils/compile-config.js';
 
 /** 构造临时工程目录（含 .cocoscli/） */
 function tmpProject(): string {
@@ -73,5 +73,52 @@ describe('readCompileConfig', () => {
     // 文件内容未被改写
     const content = fs.readFileSync(path.join(dir, '.cocoscli', 'compile.config.json'), 'utf-8');
     expect(content).toBe('{"strict":true}');
+  });
+});
+
+describe('filterExcludePath', () => {
+  const mk = (file: string) => ({ file });
+
+  it('无 excludePath → 全保留', () => {
+    const items = [mk('assets/a.ts'), mk('assets/b.ts')];
+    const r = filterExcludePath(items);
+    expect(r.kept).toHaveLength(2);
+    expect(r.excluded).toBe(0);
+  });
+
+  it('目录前缀匹配 → 排除该目录下所有文件', () => {
+    const items = [
+      mk('assets/biz_modules/foo.ts'),
+      mk('assets/biz_modules/sub/bar.ts'),
+      mk('assets/mine.ts'),
+    ];
+    const r = filterExcludePath(items, ['assets/biz_modules']);
+    expect(r.kept).toHaveLength(1);
+    expect(r.kept[0].file).toBe('assets/mine.ts');
+    expect(r.excluded).toBe(2);
+  });
+
+  it('不误伤同名前缀的不同目录（assets/biz_modules vs assets/biz_modules_other）', () => {
+    const items = [mk('assets/biz_modules/a.ts'), mk('assets/biz_modules_other/b.ts')];
+    const r = filterExcludePath(items, ['assets/biz_modules']);
+    expect(r.kept).toHaveLength(1);
+    expect(r.kept[0].file).toBe('assets/biz_modules_other/b.ts');
+    expect(r.excluded).toBe(1);
+  });
+
+  it('多前缀 + 反斜杠/前导点/尾斜杠 兼容', () => {
+    const items = [mk('assets/biz_modules/a.ts'), mk('temp/x.ts'), mk('assets/keep.ts')];
+    const r = filterExcludePath(items, ['.\\assets\\biz_modules', '/temp/']);
+    expect(r.kept).toHaveLength(1);
+    expect(r.kept[0].file).toBe('assets/keep.ts');
+    expect(r.excluded).toBe(2);
+  });
+
+  it('excludePath 是文件 → 精确匹配排除', () => {
+    const items = [mk('assets/foo.ts'), mk('assets/bar.ts')];
+    const r = filterExcludePath(items, ['assets/foo.ts']);
+    expect(r.kept).toHaveLength(1);
+    expect(r.kept[0].file).toBe('assets/bar.ts');
+    expect(r.excluded).toBe(1);
   });
 });

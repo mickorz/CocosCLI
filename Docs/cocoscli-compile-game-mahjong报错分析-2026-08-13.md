@@ -16,7 +16,9 @@
 **配置文件机制**（取代命令行 `--strict`）：
 - 位置：`<工程>/.cocoscli/compile.config.json`
 - compile 启动时读取；不存在自动生成默认模板 `{ "strict": false }`
-- 字段 `strict`：`true` 全严格（null/类型不匹配/隐式 any 全报），`false` 对齐编辑器（默认）
+- 字段：
+  - `strict`：`true` 全严格（null/类型不匹配/隐式 any 全报），`false` 对齐编辑器（默认）
+  - `excludePath`：路径前缀数组（如 `["assets/biz_modules"]`），file 匹配这些前缀的报错排除（归 excluded，不计 real/noise）。用于排除第三方/子模块目录。目录前缀匹配（`assets/biz_modules` 排除其下所有文件，不误伤 `assets/biz_modules_other`）
 - JSON 解析失败明确报错（不吞错）
 
 默认模式 311 real 的 code 分布（实测）：
