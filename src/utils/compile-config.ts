@@ -21,6 +21,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+/** 运行时全局变量声明（P2 仅 moduleExport kind；后续可扩展 namespaceAlias 等） */
+export interface RuntimeGlobalModuleExport {
+  kind: 'moduleExport';
+  module: string;  // 模块名（如 "kiwi"），须能被工程 tsconfig paths 解析
+  export: string;  // export 名（如 "pfbm"）
+}
+
 /** compile 配置（.cocoscli/compile.config.json 的字段） */
 export interface CompileConfig {
   /**
@@ -44,6 +51,15 @@ export interface CompileConfig {
    * 匹配按目录前缀（同 excludePath 规则）。
    */
   includePath?: string[];
+
+  /**
+   * 运行时全局变量声明（bridge）：告诉 cocoscli 项目真实运行环境额外提供了哪些 global。
+   * cocoscli 据此生成 virtual .d.ts（declare const <name>: typeof import("<module>").<export>;），
+   * 由 cocos-mcp VirtualDeclaration Host 注入 Program（仅 checker 可见，不落盘、不污染工程）。
+   * 性质：补 Type Environment，不是降噪白名单。bridge 自身 diagnostics 单独报告
+   * （Type Environment Resolution Error），绝不 fallback any。P2 仅 moduleExport kind。
+   */
+  runtimeGlobals?: Record<string, RuntimeGlobalModuleExport>;
 }
 
 /** 默认配置（工头视角：关 strict） */

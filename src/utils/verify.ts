@@ -197,27 +197,33 @@ export interface ScriptDiagnostic {
  */
 export async function runScriptDiagnosticsViaMcp(
   mcpPort = 3001,
-  tsconfigPath?: string
-): Promise<{ errors: ScriptDiagnostic[]; ran: boolean }> {
+  tsconfigPath?: string,
+  virtualDeclarations?: { fileName: string; content: string }[]
+): Promise<{ errors: ScriptDiagnostic[]; environmentErrors: ScriptDiagnostic[]; ran: boolean }> {
   // run_script_diagnostics 调编辑器内置 tsc 编译 assets，耗时较长（可能 >5 秒），timeout 给 60 秒
-  // tsconfigPath：传自定义 tsconfig（相对 projectPath），解决默认 temp/tsconfig.cocos.json
-  //   无 include 字段导致 tsc 不检查 assets 的问题（见 ensureVerifyTsconfig）
+  // P1: tsconfigPath 省略 → cocos-mcp 用工程 tsconfig.json（忠实模式，不自拼 verify tsconfig）
+  // P2: virtualDeclarations → cocos-mcp VirtualDeclaration Host 注入 runtime globals bridge（不落盘）
+  const body: Record<string, unknown> = {};
+  if (tsconfigPath) body.tsconfigPath = tsconfigPath;
+  if (virtualDeclarations && virtualDeclarations.length > 0) body.virtualDeclarations = virtualDeclarations;
   const resp = await httpPostJson(
     `http://127.0.0.1:${mcpPort}/api/debug/run_script_diagnostics`,
-    tsconfigPath ? { tsconfigPath } : {},
+    body,
     60000
   );
   if (!resp) {
-    return { errors: [], ran: false };
+    return { errors: [], environmentErrors: [], ran: false };
   }
   const result = (resp.result ?? {}) as Record<string, unknown>;
   const data = (result.data ?? {}) as Record<string, unknown>;
   // 检查 diagnostics 是数组（工具不存在/响应异常时没有，如 "Unknown tool"）
   if (!Array.isArray(data.diagnostics)) {
-    return { errors: [], ran: false };
+    return { errors: [], environmentErrors: [], ran: false };
   }
   const diagnostics = data.diagnostics as ScriptDiagnostic[];
-  return { errors: diagnostics, ran: true };
+  // P2: virtual declaration 自身 diagnostics（bridge 解析失败等），单独返回，不混业务 real
+  const environmentErrors = Array.isArray(data.environmentErrors) ? (data.environmentErrors as ScriptDiagnostic[]) : [];
+  return { errors: diagnostics, environmentErrors, ran: true };
 }
 
 // ==================== verify tsconfig 构造（让 tsc 真正检查 assets） ====================

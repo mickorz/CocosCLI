@@ -2,7 +2,7 @@
 
 > 目标：把 cocoscli compile 从「tsc + 错误过滤器」升级成「Cocos-aware TypeScript Checker」——修 Type Environment 重新生成 diagnostics，而不是修 diagnostics 本身。
 > 核心原则（本工程 CLAUDE.md 最高规则）：**不要试图判断「这个错误要不要忽略」，而应该先问「我是不是缺少了这个项目真实运行环境的类型信息」。**
-> 状态：**v6——P1 已实施完成并通过验收（xuanwu 58→0，pfbm 60 留 P2），进入 P2**。
+> 状态：**v7——P1+P2 已实施完成并闭环（xuanwu 58→0；pfbm bridge 成功 60→0 / 失败 rollback 不降检查能力），进入 P2.5/P3**。
 > 修订记录：
 > - v1（2026-08-13）：初版评审外部方案，确立方向 + 5 阶段。
 > - v2（2026-08-13）：吸收 8 项关键修正——路线 C / 依赖 extends 解析 / Declaration Index / Virtual SourceFile / incremental + cache / 可证明条件且绝不 any / gf alias 仅服务 checker / 阶段重排为 7 阶段。
@@ -10,6 +10,7 @@
 > - v4（2026-08-13）：**阶段 0 四实验完成，出现颠覆性发现——当前大头误报根因是自拼 `tsconfig.verify.json`，而非缺 Global Resolver**。xuanwu 谜底揭晓（声明在 project_dts，自拼 tsconfig 丢了 include）。方案优先级重排为 P1 换项目 tsconfig / P2 pfbm bridge / P3 gf alias / suspectedGlobal 不需要。v3 通用架构保留为「未来工程通用」。
 > - v5（2026-08-13）：4 点收紧——① Type Environment Loader 写成 **prefer project tsconfig + fallback**（不硬编码「永远 project/tsconfig.json」）② P1 **只 overlay `noEmit`，不默认改 strict**（默认完全尊重 project tsconfig，仅 `--strict` 才 override）③ P3 前加 **P2.5 调查剩余 4 条 gf**（先解释 diagnostic 再补，不盲目 alias）④「真 runtime global 只剩 pfbm」**限定为本次已调查三类中唯一**。补 P1 实施规范 + 6 项验收标准 + 「先忠实再 Cocos-aware」实施哲学。
 > - v6（2026-08-13）：**P1 实施完成 + 验收**。`compile.ts` 改忠实模式（废弃 `ensureVerifyTsconfig` 自拼，cocos-mcp 用 project tsconfig.json）。实测 xuanwu 58→0、pfbm 60（real）、real 665（忠实 strict:true vs 之前 311）。发现 **gf TS 版本敏感性**（编辑器 4.6=167 全 noise vs cocoscli 5.9=4）。6 项验收 5 项通过 + gf 版本差异 1 项待 P2.5 在 4.6 链路复查。
+> - v7（2026-08-13）：**P2 实施完成 + 闭环**。cocos-mcp 通用 VirtualDeclaration Host（createCompilerHost 包一层 + virtual 加入 rootNames + diagnostics 分层）+ cocoscli runtimeGlobals 配置 / bridge 生成；**Type Environment Commit / Rollback（fail closed，事务语义）**——bridge 验证失败重跑无 bridge，业务回到 TS2304，绝不 implicit any。7 项验收全过（pfbm 成功 60→0 强类型 / 配错 rollback 恢复 60 不降检查能力）。
 
 ## 一、核心判断与定位
 
@@ -130,6 +131,32 @@ P1 已实施：`src/commands/compile.ts` 改忠实模式（删 `ensureVerifyTsco
 
 real 665 待修构成：pfbm 60（P2 bridge）+ proto 重复 ~68（TS2300/2451/2393，工程修）+ testerror 真实错误 + 其他真实类型错误 + strict 错误 ~200+（忠实代价）。
 
+### P2 实施结果（v7 实测，2026-08-13）
+
+P2 已实施并闭环（通用 VirtualDeclaration 能力，cocos-mcp 不含 pfbm/runtimeGlobals 业务知识）：
+
+- cocos-mcp `diagnostics.ts`：通用 VirtualDeclaration Host（`createCompilerHost` 包一层，override fileExists/readFile/getSourceFile；virtual 加入 rootNames）+ diagnostics 分层（environmentErrors 单独收集）
+- cocos-mcp `debug-tools.ts`：`run_script_diagnostics` 透传 virtualDeclarations
+- cocoscli `compile-config.ts`：CompileConfig 加 `runtimeGlobals`（Record<string, {kind:'moduleExport'; module; export}>）
+- cocoscli `runtime-globals.ts`：`buildRuntimeGlobalsDeclaration` 生成强类型 bridge（`declare const <name>: typeof import("<module>").<export>;`）
+- cocoscli `verify.ts` / `compile.ts`：透传 virtualDeclarations + environmentErrors 分层显示（Type Environment Resolution Error）
+
+**Type Environment Commit / Rollback（fail closed，事务语义，非 fallback）**：bridge 生成 → 验证（environmentErrors）→ 成功 commit（业务用带 bridge 的 Program，pfbm 得强类型）/ 失败 rollback（重跑无 bridge 的 Program，业务回到 TS2304，绝不 implicit any 假阴性）。仅失败路径多一次 createProgram，成功路径零开销。P2 整体 commit/rollback；未来多 bridge 可逐项验证（RuntimeGlobalResolution {name, validated, diagnostics}），一个坏 bridge 不拖累好的。
+
+7 项验收（game-mahjong 全工程，cocos-mcp 编辑器 TS 4.6）：
+
+| # | 验收项 | 实测 | 结论 |
+|---|---|---|---|
+| ① | pfbm TS2304（正确配置 module=kiwi）| 60→0 | ✓ |
+| ② | virtual declaration 自身 diagnostics（正确配置）| envErrors=0 | ✓ bridge 解析成功 |
+| ③ | pfbm 正确 API 不新增错 | real 605=665−60，virtual 不在 real | ✓ |
+| ④ | pfbm 不存在方法 → TS2339 | 探查脚本证 TS2339 on PrefabManger | ✓ |
+| ⑤ | 删 runtimeGlobals.pfbm → 恢复 | real 恢复 665 | ✓ 无隐式降噪 |
+| ⑥ | 配错 module → envError + 不放行 | envError(TS2307 kiwii) + **pfbm TS2304 恢复 60** + real 665 | ✓ rollback 无 implicit any |
+| ⑦ | 磁盘无 runtime-globals.d.ts | 不存在 | ✓ virtual 不落盘 |
+
+**P2 闭环定义达成**：pfbm bridge 成功时提供强类型（real 605，PrefabManger 类型链保留，写错方法 TS2339 可抓）；失败时绝不降低原有检查能力（rollback → pfbm TS2304 60，real 665，无 implicit any 假阴性）。
+
 ### 实施哲学
 
 > **先让 cocoscli 成为「忠实使用项目 TypeScript 环境的 checker」，然后再让它成为「Cocos-aware checker」。**
@@ -239,10 +266,12 @@ function resolveGlobal(name: string): ResolvedRuntimeGlobal | SuspectedRuntimeGl
 
 ## 八、整体结论与下一步
 
-- **核心假设全部验证通过**：pfbm 强类型 bridge 可行且补检查（非降噪）；项目 tsconfig 是完整正确的类型环境。
-- **最大教训**：之前几轮设计复杂 Global Resolver，根因其实是「cocoscli 自己拼了残缺 tsconfig」。**P1 换回项目 tsconfig 就是 80% 收益。**
-- **问题已大幅降复杂度**：原始 diagnostics 分两类——Type Environment Bug（xuanwu / 大部分 gf，用正确 tsconfig 即解决）+ 真 Runtime Global（pfbm，typed bridge）。未必需要一开始就造 Declaration Index / Resolver / Fingerprint / Incremental。
-- **下一步**：实施 P1（见第三节 P1 实施规范 + 6 项验收），跑完整 `cocoscli compile` 保存前后统计；再按 P2 → P2.5 → P3 节奏推进。
+- **P1+P2 已实施闭环**：P1 忠实 project tsconfig（xuanwu 58→0）；P2 pfbm VirtualDeclaration bridge + Commit/Rollback（成功 60→0 强类型，失败 rollback 不降检查能力）。
+- **最大教训**：之前几轮设计复杂 Global Resolver，根因其实是「cocoscli 自己拼了残缺 tsconfig」。P1 换回项目 tsconfig 是 80% 收益，P2 用通用 VirtualDeclaration Host + Commit/Rollback 解决剩余 pfbm。
+- **下一步**：
+  - **P2.5**：调查 gf（cocos-mcp 编辑器 TS 4.6 下 167 条 TS2503，全 noise；逐条看 value/type/namespace position，确认是否 alias 缺失）
+  - **P3**：仅当 P2.5 确认 gf 确为 alias 缺失，才加 `import gf = gameframe`（复用 P2 VirtualDeclaration Host，runtimeGlobals 加 namespaceAlias kind）
+  - gf 不污染 real（167 全 noise），优先级低于真实类型错误
 - v3 通用架构（双索引/Resolver/cache/incremental）保留为未来工程通用能力，**现在不投入实现成本**。
 
 ## 九、参考

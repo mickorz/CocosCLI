@@ -11,6 +11,7 @@ import {
 } from '../utils/verify.js';
 import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
 import { readCompileConfig, filterExcludePath, filterIncludePath, validatePaths, type CompileConfig } from '../utils/compile-config.js';
+import { buildRuntimeGlobalsDeclaration } from '../utils/runtime-globals.js';
 
 // compile 命令：调 cocos-mcp run_script_diagnostics 做编译检查，生成 log
 //
@@ -97,14 +98,32 @@ export async function compile(projectDir?: string): Promise<void> {
   console.log(chalk.gray(`[检查4] 使用工程 tsconfig.json（忠实模式，不构造 verify tsconfig）`));
   const tsconfigArg = undefined; // 不传 → cocos-mcp findTsConfig 默认优先 project/tsconfig.json
 
+  // P2: 生成 runtime globals bridge（virtual declaration，不落盘，仅 checker 可见）
+  // 由 compile.config.json 的 runtimeGlobals 生成强类型 bridge（declare const <name>: typeof import("<module>").<export>;）
+  const runtimeGlobalsDecl = buildRuntimeGlobalsDeclaration(config.runtimeGlobals);
+  const virtualDeclarations = runtimeGlobalsDecl ? [runtimeGlobalsDecl] : undefined;
+  if (virtualDeclarations) {
+    console.log(chalk.gray(`[P2] runtime globals bridge 已生成（virtual，不落盘）：${Object.keys(config.runtimeGlobals ?? {}).join(', ')}`));
+  }
+
   // 检查5：run_script_diagnostics 工具可用（同时拿编译结果）
-  const diag = await runScriptDiagnosticsViaMcp(mcpPort, tsconfigArg);
+  const diag = await runScriptDiagnosticsViaMcp(mcpPort, tsconfigArg, virtualDeclarations);
   if (!diag.ran) {
     console.log(chalk.red('[检查5] run_script_diagnostics 工具不可用'));
     console.log(chalk.gray('  CocosMCP 可能没移植 run_script_diagnostics，或 CocosCreator 需重启加载新 CocosMCP。'));
     process.exit(1);
   }
   console.log(chalk.gray('[检查5] run_script_diagnostics 可用\n'));
+
+  // P2: Type Environment Resolution Error（virtual bridge 自身 diagnostics）
+  // bridge 解析失败（如 module/export 无法解析）单独报告，绝不 fallback any，不混业务 real/noise
+  if (diag.environmentErrors.length > 0) {
+    console.log(chalk.red(`[Type Environment Resolution Error] runtime globals bridge 解析失败（绝不 fallback any）：`));
+    diag.environmentErrors.forEach((e) => {
+      console.log(chalk.red(`  ${e.code}: ${e.message}`));
+    });
+    console.log(chalk.gray('  请检查 .cocoscli/compile.config.json 的 runtimeGlobals（module 须能被工程 tsconfig paths 解析，export 须存在）'));
+  }
 
   // includePath 白名单（为空全保留）+ excludePath 黑名单，串行过滤
   const { kept: afterInclude, excluded: excludedByInclude } = filterIncludePath(diag.errors, config.includePath);
@@ -161,7 +180,9 @@ export async function compile(projectDir?: string): Promise<void> {
     timestamp: new Date().toISOString(),
     mcpPort,
     tsconfigPath: 'tsconfig.json',
-    ok: classified.real.length === 0,
+    runtimeGlobals: config.runtimeGlobals ?? null,
+    environmentErrors: diag.environmentErrors,
+    ok: classified.real.length === 0 && diag.environmentErrors.length === 0,
     errorCount: classified.real.length,
     excludedCount,
     excludedByInclude,
