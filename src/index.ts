@@ -73,7 +73,8 @@ program
 program
   .command('compile [dir]')
   .description('编译检查（cocos-mcp run_script_diagnostics），生成编译报告到 .cocoscli/compile-log.txt')
-  .action(async (dir?: string) => compile(dir));
+  .option('--strict', '严格模式：开启 strict 类型检查（默认关闭，对齐编辑器不管 null/类型不匹配）')
+  .action(async (dir: string | undefined, opts: { strict?: boolean }) => compile(dir, opts.strict));
 
 // previewscene：切换场景并获取预览地址（CocosMCP scene_management + server_information）
 program

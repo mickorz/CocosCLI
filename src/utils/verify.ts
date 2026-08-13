@@ -243,7 +243,7 @@ export interface VerifyTsconfigSetup {
  * @returns tsconfigPath 给 cocos-mcp findTsConfig join 用（POSIX 相对路径，跨平台一致）
  *          written=false 表示 temp/tsconfig.cocos.json 不存在，调用方应拦截（避免假阳性）
  */
-export function ensureVerifyTsconfig(projectPath: string): VerifyTsconfigSetup {
+export function ensureVerifyTsconfig(projectPath: string, opts: { strict?: boolean } = {}): VerifyTsconfigSetup {
   const cocosTsconfig = path.join(projectPath, 'temp', 'tsconfig.cocos.json');
   if (!fs.existsSync(cocosTsconfig)) {
     return {
@@ -259,19 +259,28 @@ export function ensureVerifyTsconfig(projectPath: string): VerifyTsconfigSetup {
   if (hasDts) include.push('../dts/**/*.d.ts');
   include.push('../assets/**/*.ts');
 
+  // compilerOptions 单独构造：默认（非 strict）关 strict（务实工头视角，不管 null/类型不匹配/隐式any）
+  const compilerOptions: Record<string, unknown> = {
+    types: [],
+    skipLibCheck: true, // 跳过 .d.ts 语义检查，避免引擎 @types（jsb.d.ts 等）声明噪音
+    // 升级 lib：base 的 target ES2015 不含 includes/values/entries（ES2016/2017），工程大量用
+    lib: ['ES2017', 'DOM'],
+    // 还原 Cocos biz_modules / node_modules 的 *Module 裸模块别名
+    // 编辑器用 cc 模块系统认这些别名，纯 tsc 不认 → import 解析失败 → TS2307/TS2503/TS2339 连锁
+    baseUrl: '.',
+    paths: {
+      '*Module': ['../assets/biz_modules/*Module', '../assets/node_modules/*Module'],
+      '*Module/*': ['../assets/biz_modules/*Module/*', '../assets/node_modules/*Module/*'],
+    },
+  };
+  // --strict 时保持 base 的 strict:true 全开；默认覆盖为 false（对齐编辑器，不管 null/类型严格性）
+  if (!opts.strict) {
+    compilerOptions.strict = false;
+  }
+
   const tsconfig = {
     extends: '../temp/tsconfig.cocos.json',
-    compilerOptions: {
-      types: [],
-      skipLibCheck: true, // 跳过 .d.ts 语义检查，避免引擎 @types（jsb.d.ts 等）声明噪音
-      // 还原 Cocos biz_modules / node_modules 的 *Module 裸模块别名
-      // 编辑器用 cc 模块系统认这些别名，纯 tsc 不认 → import 解析失败 → TS2307/TS2503/TS2339 连锁
-      baseUrl: '.',
-      paths: {
-        '*Module': ['../assets/biz_modules/*Module', '../assets/node_modules/*Module'],
-        '*Module/*': ['../assets/biz_modules/*Module/*', '../assets/node_modules/*Module/*'],
-      },
-    },
+    compilerOptions,
     include,
   };
 

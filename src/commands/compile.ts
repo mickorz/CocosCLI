@@ -22,7 +22,7 @@ import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
  *
  * @param projectDir 工程目录，省略时默认当前执行目录
  */
-export async function compile(projectDir?: string): Promise<void> {
+export async function compile(projectDir?: string, strict?: boolean): Promise<void> {
   const dir = path.resolve(projectDir ?? process.cwd());
 
   if (!isCocosProject(dir)) {
@@ -34,7 +34,8 @@ export async function compile(projectDir?: string): Promise<void> {
   const mcpPort = readMcpPort(dir);
   console.log(chalk.cyan(`编译检查（cocos-mcp run_script_diagnostics）`));
   console.log(chalk.gray(`工程：${dir}`));
-  console.log(chalk.gray(`MCP 端口：${mcpPort}\n`));
+  console.log(chalk.gray(`MCP 端口：${mcpPort}`));
+  console.log(chalk.gray(`模式：${strict ? '严格（strict 全开）' : '默认（对齐编辑器，关 strict）'}\n`));
 
   // ===== 前置检查（四条链路，任一失败中断 + 提示修复）=====
 
@@ -67,7 +68,7 @@ export async function compile(projectDir?: string): Promise<void> {
 
   // 检查4：构造 verify tsconfig（让 tsc 真正检查 assets，避免默认 temp/tsconfig.cocos.json
   //       无 include 字段导致只编译 temp/ 而漏检 assets 脚本错误）
-  const tsconfigSetup = ensureVerifyTsconfig(dir);
+  const tsconfigSetup = ensureVerifyTsconfig(dir, { strict });
   if (!tsconfigSetup.written) {
     // written=false：temp/tsconfig.cocos.json 不存在。若工程根也无 tsconfig.json，cocos-mcp 的
     // findTsConfig 会返回空 → tsc 跑空 → error=0 假阳性。这里直接拦截，提示开编辑器生成 temp/
