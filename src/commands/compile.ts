@@ -11,7 +11,7 @@ import {
   ScriptDiagnostic,
 } from '../utils/verify.js';
 import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
-import { readCompileConfig, filterExcludePath, type CompileConfig } from '../utils/compile-config.js';
+import { readCompileConfig, filterExcludePath, filterIncludePath, type CompileConfig } from '../utils/compile-config.js';
 
 // compile 命令：调 cocos-mcp run_script_diagnostics 做编译检查，生成 log
 //
@@ -105,8 +105,10 @@ export async function compile(projectDir?: string): Promise<void> {
   }
   console.log(chalk.gray('[检查5] run_script_diagnostics 可用\n'));
 
-  // excludePath 过滤：配置里 excludePath 前缀匹配的 file 排除（如 assets/biz_modules 第三方/子模块目录）
-  const { kept: filteredErrors, excluded: excludedCount } = filterExcludePath(diag.errors, config.excludePath);
+  // includePath 白名单（为空全保留）+ excludePath 黑名单，串行过滤
+  const { kept: afterInclude, excluded: excludedByInclude } = filterIncludePath(diag.errors, config.includePath);
+  const { kept: filteredErrors, excluded: excludedByExclude } = filterExcludePath(afterInclude, config.excludePath);
+  const excludedCount = excludedByInclude + excludedByExclude;
   // 降噪分类（层1 明确规则 + 层2 频次阈值，折叠第三方库声明噪音）
   const classified = classifyDiagnostics(filteredErrors);
   // snippet：cocos-mcp 已自带就优先用，没有则读文件兜底
@@ -143,9 +145,12 @@ export async function compile(projectDir?: string): Promise<void> {
     console.log(chalk.gray('  注：基于规则启发式可能误判，完整列表见 log JSON 的 noise 字段'));
   }
 
-  // 展示 excluded（excludePath 排除的，不计 real/noise）
+  // 展示 excluded（includePath 之外 + excludePath 匹配，不计 real/noise）
   if (excludedCount > 0) {
-    console.log(chalk.gray(`\n[已排除 ${excludedCount} 条 excludePath 匹配（${(config.excludePath ?? []).join(', ')}），不计 real/noise，详见 log]`));
+    const parts: string[] = [];
+    if (excludedByInclude > 0) parts.push(`includePath 之外 ${excludedByInclude} 条`);
+    if (excludedByExclude > 0) parts.push(`excludePath 匹配 ${excludedByExclude} 条（${(config.excludePath ?? []).join(', ')}）`);
+    console.log(chalk.gray(`\n[已排除 ${excludedCount} 条（${parts.join('，')}），不计 real/noise，详见 log]`));
   }
 
   // 写 log（real 全量 + noise 全量 + 摘要，方便事后查误判）
@@ -158,6 +163,9 @@ export async function compile(projectDir?: string): Promise<void> {
     ok: classified.real.length === 0,
     errorCount: classified.real.length,
     excludedCount,
+    excludedByInclude,
+    excludedByExclude,
+    includePaths: config.includePath ?? [],
     excludedPaths: config.excludePath ?? [],
     errors: classified.real.map(withSnippet),
     noiseSummary: classified.noiseSummary,

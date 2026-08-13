@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { readCompileConfig, DEFAULT_COMPILE_CONFIG, filterExcludePath } from '../../utils/compile-config.js';
+import { readCompileConfig, DEFAULT_COMPILE_CONFIG, filterExcludePath, filterIncludePath } from '../../utils/compile-config.js';
 
 /** 构造临时工程目录（含 .cocoscli/） */
 function tmpProject(): string {
@@ -119,6 +119,54 @@ describe('filterExcludePath', () => {
     const r = filterExcludePath(items, ['assets/foo.ts']);
     expect(r.kept).toHaveLength(1);
     expect(r.kept[0].file).toBe('assets/bar.ts');
+    expect(r.excluded).toBe(1);
+  });
+});
+
+describe('filterIncludePath', () => {
+  const mk = (file: string) => ({ file });
+
+  it('无 includePath → 全保留（默认检查所有）', () => {
+    const items = [mk('assets/a.ts'), mk('temp/b.ts')];
+    const r = filterIncludePath(items);
+    expect(r.kept).toHaveLength(2);
+    expect(r.excluded).toBe(0);
+  });
+
+  it('有 includePath → 只保留白名单内，其余排除', () => {
+    const items = [
+      mk('assets/10000/a.ts'),
+      mk('assets/scripts/testerror/b.ts'),
+      mk('assets/biz_modules/c.ts'),
+      mk('temp/d.ts'),
+    ];
+    const r = filterIncludePath(items, ['assets/10000', 'assets/scripts/testerror']);
+    expect(r.kept).toHaveLength(2);
+    expect(r.kept.map((i) => i.file)).toEqual(['assets/10000/a.ts', 'assets/scripts/testerror/b.ts']);
+    expect(r.excluded).toBe(2);
+  });
+
+  it('目录前缀（不误伤同名目录）', () => {
+    const items = [mk('assets/10000/x.ts'), mk('assets/10000_other/y.ts')];
+    const r = filterIncludePath(items, ['assets/10000']);
+    expect(r.kept).toHaveLength(1);
+    expect(r.kept[0].file).toBe('assets/10000/x.ts');
+    expect(r.excluded).toBe(1);
+  });
+
+  it('反斜杠/前导点/尾斜杠兼容', () => {
+    const items = [mk('assets/10000/a.ts'), mk('assets/b.ts')];
+    const r = filterIncludePath(items, ['.\\assets\\10000\\']);
+    expect(r.kept).toHaveLength(1);
+    expect(r.kept[0].file).toBe('assets/10000/a.ts');
+    expect(r.excluded).toBe(1);
+  });
+
+  it('includePath 是文件 → 只保留该文件', () => {
+    const items = [mk('assets/foo.ts'), mk('assets/bar.ts')];
+    const r = filterIncludePath(items, ['assets/foo.ts']);
+    expect(r.kept).toHaveLength(1);
+    expect(r.kept[0].file).toBe('assets/foo.ts');
     expect(r.excluded).toBe(1);
   });
 });

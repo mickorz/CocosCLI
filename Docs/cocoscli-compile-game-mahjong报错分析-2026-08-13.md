@@ -18,7 +18,8 @@
 - compile 启动时读取；不存在自动生成默认模板 `{ "strict": false }`
 - 字段：
   - `strict`：`true` 全严格（null/类型不匹配/隐式 any 全报），`false` 对齐编辑器（默认）
-  - `excludePath`：路径前缀数组（如 `["assets/biz_modules"]`），file 匹配这些前缀的报错排除（归 excluded，不计 real/noise）。用于排除第三方/子模块目录。目录前缀匹配（`assets/biz_modules` 排除其下所有文件，不误伤 `assets/biz_modules_other`）
+  - `excludePath`：路径前缀黑名单（如 `["assets/biz_modules"]`），file 匹配的报错排除（归 excluded，不计 real/noise）。用于排除第三方/子模块目录。目录前缀匹配（`assets/biz_modules` 排除其下所有文件，不误伤 `assets/biz_modules_other`）
+  - `includePath`：路径前缀白名单（如 `["assets/10000", "assets/scripts/testerror"]`），空则检查所有（默认）；非空则只检查这些路径，其余排除（归 excluded）。与 excludePath 互补，串行执行：先 includePath 白名单 → 再 excludePath 黑名单
 - JSON 解析失败明确报错（不吞错）
 
 默认模式 311 real 的 code 分布（实测）：

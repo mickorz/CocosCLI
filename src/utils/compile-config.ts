@@ -36,6 +36,14 @@ export interface CompileConfig {
    * 默认空（不排除）。
    */
   excludePath?: string[];
+
+  /**
+   * 包含路径前缀数组（相对工程根，正斜杠，如 ["assets/10000", "assets/scripts/testerror"]）：
+   * 为空 → 检查所有（默认）；不为空 → 只检查这些路径下的，其余排除（归 excluded）。
+   * 与 excludePath 互补：includePath 是白名单，excludePath 是黑名单。
+   * 匹配按目录前缀（同 excludePath 规则）。
+   */
+  includePath?: string[];
 }
 
 /** 默认配置（工头视角：关 strict） */
@@ -99,6 +107,36 @@ export function filterExcludePath<T extends { file: string }>(
     const isExcluded = norms.some((p) => f === p || f.startsWith(p + '/'));
     if (isExcluded) excluded++;
     return !isExcluded;
+  });
+  return { kept, excluded };
+}
+
+/**
+ * 按 includePath 前缀白名单过滤诊断：includePath 为空全保留；不为空只保留 file 匹配任一前缀的
+ *
+ * 与 filterExcludePath 互补（includePath 白名单，excludePath 黑名单）。
+ * 匹配规则同 filterExcludePath（目录前缀，不误伤同名目录）。
+ *
+ * @param items 诊断数组
+ * @param includePath 白名单前缀（空则全保留）
+ * @returns kept 保留的；excluded 被排除（不在白名单）的数量
+ */
+export function filterIncludePath<T extends { file: string }>(
+  items: T[],
+  includePath?: string[]
+): { kept: T[]; excluded: number } {
+  if (!includePath || includePath.length === 0) {
+    return { kept: items, excluded: 0 };
+  }
+  const norms = includePath.map((p) =>
+    p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, '')
+  );
+  let excluded = 0;
+  const kept = items.filter((item) => {
+    const f = item.file.replace(/\\/g, '/');
+    const isIncluded = norms.some((p) => f === p || f.startsWith(p + '/'));
+    if (!isIncluded) excluded++;
+    return isIncluded;
   });
   return { kept, excluded };
 }
