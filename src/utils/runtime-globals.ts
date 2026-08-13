@@ -15,7 +15,7 @@
  *   cocos-mcp 只负责「给我一份 virtual .d.ts，加入 Program」（不含 pfbm/业务知识）
  */
 
-import type { RuntimeGlobalModuleExport } from './compile-config.js';
+import type { RuntimeGlobal } from './compile-config.js';
 
 /**
  * cocoscli 侧的 virtual declaration
@@ -36,7 +36,7 @@ export const RUNTIME_GLOBALS_VIRTUAL_FILENAME = '__cocoscli_runtime_globals__.d.
  * @returns VirtualDeclaration 或 null（无 runtimeGlobals 时不注入）
  */
 export function buildRuntimeGlobalsDeclaration(
-  runtimeGlobals?: Record<string, RuntimeGlobalModuleExport>
+  runtimeGlobals?: Record<string, RuntimeGlobal>
 ): VirtualDeclaration | null {
   if (!runtimeGlobals) return null;
   const entries = Object.entries(runtimeGlobals);
@@ -51,8 +51,10 @@ export function buildRuntimeGlobalsDeclaration(
     if (g.kind === 'moduleExport') {
       // 强类型 bridge：保留整条类型链（写错方法名仍能 TS2339 抓到），绝不 any fallback
       lines.push(`declare const ${name}: typeof import("${g.module}").${g.export};`);
+    } else if (g.kind === 'namespaceAlias') {
+      // P3 namespace alias：import <name> = <target>（保留完整 namespace，value + type）
+      lines.push(`import ${name} = ${g.target};`);
     }
-    // P2 仅 moduleExport；后续 namespaceAlias 等 kind 在此分支扩展
   }
   return { fileName: RUNTIME_GLOBALS_VIRTUAL_FILENAME, content: lines.join('\n') + '\n' };
 }

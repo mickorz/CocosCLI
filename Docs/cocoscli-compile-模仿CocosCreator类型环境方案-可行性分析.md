@@ -2,7 +2,7 @@
 
 > 目标：把 cocoscli compile 从「tsc + 错误过滤器」升级成「Cocos-aware TypeScript Checker」——修 Type Environment 重新生成 diagnostics，而不是修 diagnostics 本身。
 > 核心原则（本工程 CLAUDE.md 最高规则）：**不要试图判断「这个错误要不要忽略」，而应该先问「我是不是缺少了这个项目真实运行环境的类型信息」。**
-> 状态：**v7——P1+P2 已实施完成并闭环（xuanwu 58→0；pfbm bridge 成功 60→0 / 失败 rollback 不降检查能力），进入 P2.5/P3**。
+> 状态：**v8——P1+P2+P3 全部实施完成并闭环（xuanwu/pfbm/gf 三类运行时全局解决），剩余为真实类型错误**。
 > 修订记录：
 > - v1（2026-08-13）：初版评审外部方案，确立方向 + 5 阶段。
 > - v2（2026-08-13）：吸收 8 项关键修正——路线 C / 依赖 extends 解析 / Declaration Index / Virtual SourceFile / incremental + cache / 可证明条件且绝不 any / gf alias 仅服务 checker / 阶段重排为 7 阶段。
@@ -11,6 +11,7 @@
 > - v5（2026-08-13）：4 点收紧——① Type Environment Loader 写成 **prefer project tsconfig + fallback**（不硬编码「永远 project/tsconfig.json」）② P1 **只 overlay `noEmit`，不默认改 strict**（默认完全尊重 project tsconfig，仅 `--strict` 才 override）③ P3 前加 **P2.5 调查剩余 4 条 gf**（先解释 diagnostic 再补，不盲目 alias）④「真 runtime global 只剩 pfbm」**限定为本次已调查三类中唯一**。补 P1 实施规范 + 6 项验收标准 + 「先忠实再 Cocos-aware」实施哲学。
 > - v6（2026-08-13）：**P1 实施完成 + 验收**。`compile.ts` 改忠实模式（废弃 `ensureVerifyTsconfig` 自拼，cocos-mcp 用 project tsconfig.json）。实测 xuanwu 58→0、pfbm 60（real）、real 665（忠实 strict:true vs 之前 311）。发现 **gf TS 版本敏感性**（编辑器 4.6=167 全 noise vs cocoscli 5.9=4）。6 项验收 5 项通过 + gf 版本差异 1 项待 P2.5 在 4.6 链路复查。
 > - v7（2026-08-13）：**P2 实施完成 + 闭环**。cocos-mcp 通用 VirtualDeclaration Host（createCompilerHost 包一层 + virtual 加入 rootNames + diagnostics 分层）+ cocoscli runtimeGlobals 配置 / bridge 生成；**Type Environment Commit / Rollback（fail closed，事务语义）**——bridge 验证失败重跑无 bridge，业务回到 TS2304，绝不 implicit any。7 项验收全过（pfbm 成功 60→0 强类型 / 配错 rollback 恢复 60 不降检查能力）。
+> - v8（2026-08-13）：**P3 实施完成 + 闭环**。runtime-globals.ts 加 namespaceAlias kind（`import gf = gameframe`），复用 P2 VirtualDeclaration Host + Commit/Rollback（cocos-mcp 不改）。5 项硬验收全过（gf 167→0 / 故意写错 gf.sp 抓 TS2339+TS2694 / coverage 167/167 / gf.Vec2 强类型恢复抓真实错误 / 配错 rollback）。**发现 TS5.9 namespace alias 解析 bug**（gf.sp 推 any），4.6 正确强类型——印证路线 C 用编辑器 TS。
 
 ## 一、核心判断与定位
 
@@ -157,6 +158,27 @@ P2 已实施并闭环（通用 VirtualDeclaration 能力，cocos-mcp 不含 pfbm
 
 **P2 闭环定义达成**：pfbm bridge 成功时提供强类型（real 605，PrefabManger 类型链保留，写错方法 TS2339 可抓）；失败时绝不降低原有检查能力（rollback → pfbm TS2304 60，real 665，无 implicit any 假阴性）。
 
+### P3 实施结果（v8 实测，2026-08-13）
+
+P3 已实施并闭环（复用 P2 基础设施，cocos-mcp 不改）：
+- cocoscli `runtime-globals.ts`：加 namespaceAlias kind（生成 `import <name> = <target>;`，如 `import gf = gameframe;`）
+- cocoscli `compile-config.ts`：RuntimeGlobal 类型加 namespaceAlias（union：moduleExport | namespaceAlias）
+- cocos-mcp 侧无改动（VirtualDeclaration Host + Commit/Rollback 通用，接任意 content）
+
+5 项硬验收（game-mahjong 全工程，cocos-mcp 编辑器 TS 4.6）：
+
+| # | 验收项 | 实测 | 结论 |
+|---|---|---|---|
+| ① | TS4.6 gf 167→0 | mixed pfbm+gf: real gf=0, noise gf TS2503=0 | ✓ |
+| ② | 故意写错 gf.sp 抓 TS2339 | 4.6 实测: notExistMethodAbc→TS2339, NotExistType→TS2694 | ✓ 强类型恢复 |
+| ③ | Event coverage 167/167 | gameframe.Event(class) + sp/mvc(namespace) + Vec2(interface) + IViewPlugin(class) 全覆盖 | ✓ |
+| ④ | 新增 real 看性质 | gf.Vec2 强类型恢复，fairygui.Vec2 赋值不兼容被抓 TS2345/2322（恢复检查非回退）| ✓ |
+| ⑤ | 配错 target rollback | envError(TS2304/2503/2833 gameframeXXX) + gf 167 恢复，real 665 | ✓ 绝不 any |
+
+**关键发现：TS5.9 namespace alias 解析 bug**——probe-gf-alias（cocoscli TS5.9）下 `gf.sp.NotExistType` 无诊断（gf.sp 被推 any），但 cocos-mcp TS4.6 正确强类型（抓 TS2339/TS2694）。**4.6 在 namespace alias 上比 5.9 更正确**，进一步印证路线 C 用编辑器 TS（4.6）的必要性（非 cocoscli TS 5.9）。cocoscli TS 5.9 仅用于探查脚本（probe-type-env/probe-gf/probe-gf-alias），实际检查走 cocos-mcp 4.6。
+
+**P3 闭环定义达成**：gf 从「未声明→TS2503 归 noise + 部分类型链丢失→潜在 false negative」变成强类型区域（成功时 sp/Vec2/Event/mvc/IViewPlugin 完整类型链，故意写错被抓；失败时 rollback gf 167 恢复，绝不 any）。与 P2 的 pfbm 同类收益。
+
 ### 实施哲学
 
 > **先让 cocoscli 成为「忠实使用项目 TypeScript 环境的 checker」，然后再让它成为「Cocos-aware checker」。**
@@ -266,13 +288,14 @@ function resolveGlobal(name: string): ResolvedRuntimeGlobal | SuspectedRuntimeGl
 
 ## 八、整体结论与下一步
 
-- **P1+P2 已实施闭环**：P1 忠实 project tsconfig（xuanwu 58→0）；P2 pfbm VirtualDeclaration bridge + Commit/Rollback（成功 60→0 强类型，失败 rollback 不降检查能力）。
-- **最大教训**：之前几轮设计复杂 Global Resolver，根因其实是「cocoscli 自己拼了残缺 tsconfig」。P1 换回项目 tsconfig 是 80% 收益，P2 用通用 VirtualDeclaration Host + Commit/Rollback 解决剩余 pfbm。
-- **下一步**：
-  - **P2.5**：调查 gf（cocos-mcp 编辑器 TS 4.6 下 167 条 TS2503，全 noise；逐条看 value/type/namespace position，确认是否 alias 缺失）
-  - **P3**：仅当 P2.5 确认 gf 确为 alias 缺失，才加 `import gf = gameframe`（复用 P2 VirtualDeclaration Host，runtimeGlobals 加 namespaceAlias kind）
-  - gf 不污染 real（167 全 noise），优先级低于真实类型错误
-- v3 通用架构（双索引/Resolver/cache/incremental）保留为未来工程通用能力，**现在不投入实现成本**。
+- **P1+P2+P3 全部实施闭环**：
+  - P1 忠实 project tsconfig（xuanwu 58→0）
+  - P2 pfbm VirtualDeclaration bridge + Commit/Rollback（成功 60→0 强类型，失败 rollback）
+  - P3 gf namespaceAlias（成功 167→0 强类型恢复，失败 rollback）
+- **两类 Runtime Global 全覆盖**：moduleExport（pfbm→kiwi.pfbm）+ namespaceAlias（gf→gameframe）。通用 VirtualDeclaration Host + Commit/Rollback 基础设施复用。
+- **剩余 real（619）**：真实类型错误（gf.Vec2 不兼容 / proto 重复 / testerror / strict null 等），非运行时全局问题。proto 重复（interface_agactivity）由工程修，strict 由 project tsconfig 决定。
+- **TS 版本教训**：路线 C 用编辑器 TS（4.6）——5.9 在 namespace alias 有 bug（gf.sp any），4.6 正确。cocoscli TS 5.9 仅用于探查脚本，实际检查走 cocos-mcp 4.6。
+- v3 通用架构（Declaration Index/Resolver/cache/incremental）保留为未来工程通用能力，**P1-P3 证明当前工程不需要**（runtimeGlobals 手工配置 + Commit/Rollback 足够）。
 
 ## 九、参考
 

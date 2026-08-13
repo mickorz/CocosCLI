@@ -21,12 +21,20 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-/** 运行时全局变量声明（P2 仅 moduleExport kind；后续可扩展 namespaceAlias 等） */
+/** 运行时全局变量声明：P2 moduleExport / P3 namespaceAlias */
 export interface RuntimeGlobalModuleExport {
   kind: 'moduleExport';
   module: string;  // 模块名（如 "kiwi"），须能被工程 tsconfig paths 解析
   export: string;  // export 名（如 "pfbm"）
 }
+
+/** P3 namespace alias：把全局变量别名到已声明的 namespace（如 gf → gameframe） */
+export interface RuntimeGlobalNamespaceAlias {
+  kind: 'namespaceAlias';
+  target: string;  // 目标 namespace（须有 declare namespace，如 "gameframe"）
+}
+
+export type RuntimeGlobal = RuntimeGlobalModuleExport | RuntimeGlobalNamespaceAlias;
 
 /** compile 配置（.cocoscli/compile.config.json 的字段） */
 export interface CompileConfig {
@@ -59,7 +67,7 @@ export interface CompileConfig {
    * 性质：补 Type Environment，不是降噪白名单。bridge 自身 diagnostics 单独报告
    * （Type Environment Resolution Error），绝不 fallback any。P2 仅 moduleExport kind。
    */
-  runtimeGlobals?: Record<string, RuntimeGlobalModuleExport>;
+  runtimeGlobals?: Record<string, RuntimeGlobal>;
 }
 
 /** 默认配置（工头视角：关 strict） */
