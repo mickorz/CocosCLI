@@ -1,7 +1,49 @@
 # game-mahjong compile 报错分析报告（2026-08-13）
 
-> 数据源：`.cocoscli/compile-log-2026-08-13T02-52-09.json`（paths 修复后的结果）。real 632 + noise 1062。
+> 数据源：`.cocoscli/compile-log-2026-08-13T02-52-09.json`（paths 修复后，strict:true）。real 632 + noise 1062。
 > 用户反馈：CocosCreator 编辑器里**没有这么多报错**。本报告分析 632 real 的成因，给出分类与解决路径。
+
+## 更新记录（2026-08-13 实施 strict 配置 + lib 后实测）
+
+实施 compile 配置文件机制（`.cocoscli/compile.config.json`，默认 `strict:false` 工头视角）+ `lib: ES2017` 后，03:37 复跑实测（结果与 03:18 一致，可复现）：
+
+| 配置 | real | noise | 说明 |
+|---|---|---|---|
+| `.cocoscli/compile.config.json` = `{ "strict": false }`（默认） | **311** | 985 | null/类型严格性 + TS2550 全消除 |
+| `.cocoscli/compile.config.json` = `{ "strict": true }` | 585 | 1062 | TS2550 消除，strict 全开 |
+| 之前（02:52，strict 默认开） | 632 | 1062 | 原始状态 |
+
+**配置文件机制**（取代命令行 `--strict`）：
+- 位置：`<工程>/.cocoscli/compile.config.json`
+- compile 启动时读取；不存在自动生成默认模板 `{ "strict": false }`
+- 字段 `strict`：`true` 全严格（null/类型不匹配/隐式 any 全报），`false` 对齐编辑器（默认）
+- JSON 解析失败明确报错（不吞错）
+
+默认模式 311 real 的 code 分布（实测）：
+
+| code | 数量 | 含义 | 归类 |
+|---|---|---|---|
+| TS2304 | 64 | Cannot find name（pfbm/xuanwu 全局变量） | B 全局变量，待 suspectedGlobal |
+| TS2322 | 48 | 类型不可赋值（真实，strict:false 仍报） | 真实类型问题 |
+| TS2345 | 46 | 参数类型不匹配（真实） | 真实类型问题 |
+| TS2339 | 39 | Property 不存在 | 部分真实/部分声明 |
+| TS2380 | 22 | getter/setter 类型不匹配 | 真实类型问题 |
+| TS2451/2300/2393 | 30 | proto 生成重复 | D proto，工程修复 |
+| TS2554 | 9 | 参数个数 | 真实 |
+| TS2551 | 8 | Property 不存在（建议） | 部分真实 |
+| TS1208 | 7 | isolatedModules（testerror/common_game/lobby） | F 模块 |
+| TS1005 | 2 | testerror 语法 | E 测试数据 |
+| TS2550 | 1 | lib 残留（某 API 需 ES2022，如 Array.at） | A 残留 |
+| 其他零散 | ~35 | 各种 | 混合 |
+
+**进度**：
+- A（lib 升级）✓ 已做（TS2550 从 39 降到 1）
+- C（strict 定位）✓ 已做（默认 `strict:false`，real 632→311；`--strict` 全开）
+- B（suspectedGlobal）待做——可把 TS2304 全局变量 64 条（pfbm/xuanwu）从 real 移到 Suspected，real 降到 ~247
+- D（proto 重复）待做——工程修 interface_agactivity.ts 生成
+- E（testerror）待清理
+
+剩余 311 中，真实类型问题（TS2322/2345/2380/2740 ≈ 121）是 strict:false 仍报的硬核类型错误，编辑器视角下也可能需关注；B/D/E 处理后 real 可降到 ~150 以内。
 
 ## 一、结论先行
 

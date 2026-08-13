@@ -11,6 +11,7 @@ import {
   ScriptDiagnostic,
 } from '../utils/verify.js';
 import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
+import { readCompileConfig, type CompileConfig } from '../utils/compile-config.js';
 
 // compile 命令：调 cocos-mcp run_script_diagnostics 做编译检查，生成 log
 //
@@ -22,7 +23,7 @@ import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
  *
  * @param projectDir 工程目录，省略时默认当前执行目录
  */
-export async function compile(projectDir?: string, strict?: boolean): Promise<void> {
+export async function compile(projectDir?: string): Promise<void> {
   const dir = path.resolve(projectDir ?? process.cwd());
 
   if (!isCocosProject(dir)) {
@@ -31,11 +32,22 @@ export async function compile(projectDir?: string, strict?: boolean): Promise<vo
     process.exit(1);
   }
 
+  // 读 compile 配置（.cocoscli/compile.config.json，不存在自动生成默认模板）
+  let config: CompileConfig;
+  try {
+    config = readCompileConfig(dir);
+  } catch (e) {
+    console.log(chalk.red(`.cocoscli/compile.config.json 解析失败：${e instanceof Error ? e.message : e}`));
+    console.log(chalk.gray('  请检查配置文件 JSON 格式（如 { "strict": true }）'));
+    process.exit(1);
+  }
+  const strict = config.strict ?? false;
+
   const mcpPort = readMcpPort(dir);
   console.log(chalk.cyan(`编译检查（cocos-mcp run_script_diagnostics）`));
   console.log(chalk.gray(`工程：${dir}`));
   console.log(chalk.gray(`MCP 端口：${mcpPort}`));
-  console.log(chalk.gray(`模式：${strict ? '严格（strict 全开）' : '默认（对齐编辑器，关 strict）'}\n`));
+  console.log(chalk.gray(`模式：${strict ? '严格（strict 全开）' : '默认（对齐编辑器，关 strict）'}（配置：.cocoscli/compile.config.json）\n`));
 
   // ===== 前置检查（四条链路，任一失败中断 + 提示修复）=====
 
