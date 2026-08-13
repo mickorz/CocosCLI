@@ -140,3 +140,29 @@ export function filterIncludePath<T extends { file: string }>(
   });
   return { kept, excluded };
 }
+
+/**
+ * 校验 includePath / excludePath 路径在工程里是否存在（文件或目录）
+ *
+ * 用于检出拼错/大小写错的配置路径，避免「静默失效」（拼错的路径过滤不到任何文件 → 漏检）。
+ * compile 启动时调用，不存在的路径给警告（不阻断 compile）。
+ *
+ * @param projectPath 工程根目录
+ * @param config compile 配置
+ * @returns 不存在的路径列表（都存在则空数组）
+ */
+export function validatePaths(projectPath: string, config: CompileConfig): string[] {
+  const missing: string[] = [];
+  const check = (paths?: string[]) => {
+    if (!paths) return;
+    for (const p of paths) {
+      const abs = path.join(projectPath, p);
+      if (!fs.existsSync(abs)) {
+        missing.push(p);
+      }
+    }
+  };
+  check(config.includePath);
+  check(config.excludePath);
+  return missing;
+}

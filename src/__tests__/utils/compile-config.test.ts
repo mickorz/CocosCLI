@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { readCompileConfig, DEFAULT_COMPILE_CONFIG, filterExcludePath, filterIncludePath } from '../../utils/compile-config.js';
+import { readCompileConfig, DEFAULT_COMPILE_CONFIG, filterExcludePath, filterIncludePath, validatePaths } from '../../utils/compile-config.js';
 
 /** 构造临时工程目录（含 .cocoscli/） */
 function tmpProject(): string {
@@ -168,5 +168,39 @@ describe('filterIncludePath', () => {
     expect(r.kept).toHaveLength(1);
     expect(r.kept[0].file).toBe('assets/foo.ts');
     expect(r.excluded).toBe(1);
+  });
+});
+
+describe('validatePaths', () => {
+  it('路径都存在 → 返回空', () => {
+    const dir = tmpProject();
+    dirs.push(dir);
+    fs.mkdirSync(path.join(dir, 'assets/foo'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'assets/bar.ts'), '');
+    const missing = validatePaths(dir, { includePath: ['assets/foo', 'assets/bar.ts'] });
+    expect(missing).toEqual([]);
+  });
+
+  it('路径拼错不存在 → 返回缺失（如 scritps vs scripts）', () => {
+    const dir = tmpProject();
+    dirs.push(dir);
+    fs.mkdirSync(path.join(dir, 'assets/scripts/testerror'), { recursive: true });
+    const missing = validatePaths(dir, { includePath: ['assets/scritps/testerror'] });
+    expect(missing).toEqual(['assets/scritps/testerror']);
+  });
+
+  it('includePath + excludePath 都校验', () => {
+    const dir = tmpProject();
+    dirs.push(dir);
+    fs.mkdirSync(path.join(dir, 'assets/keep'), { recursive: true });
+    const missing = validatePaths(dir, { includePath: ['assets/keep'], excludePath: ['assets/typo'] });
+    expect(missing).toEqual(['assets/typo']);
+  });
+
+  it('无 includePath/excludePath → 返回空', () => {
+    const dir = tmpProject();
+    dirs.push(dir);
+    const missing = validatePaths(dir, {});
+    expect(missing).toEqual([]);
   });
 });

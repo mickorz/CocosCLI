@@ -22,6 +22,34 @@
   - `includePath`：路径前缀白名单（如 `["assets/10000", "assets/scripts/testerror"]`），空则检查所有（默认）；非空则只检查这些路径，其余排除（归 excluded）。与 excludePath 互补，串行执行：先 includePath 白名单 → 再 excludePath 黑名单
 - JSON 解析失败明确报错（不吞错）
 
+### 06:28 实测：includePath 精准定位 + 拼写踩坑
+
+配置 `includePath: ["assets/10000", "assets/scritps/testerror"]` + `excludePath: ["assets/biz_modules"]` 实测：
+
+| 指标 | 值 | 说明 |
+|---|---|---|
+| real | **19** | 全是 assets/10000 的（testerror 因拼写错误漏检） |
+| noise | 91 | TS1192:59 proto + TS2503:20 gf + TS2304:12 |
+| excluded | 1186 | includePath 之外 |
+
+assets/10000 的 19 个真实错误（strict:false 下仍报的硬核问题）：
+
+| code | 数量 | 含义 |
+|---|---|---|
+| TS2393 | 6 | Duplicate function implementation（重复函数实现） |
+| TS2345 | 5 | 参数类型不匹配 |
+| TS2341 | 2 | 访问 private 成员（类外访问私有） |
+| TS2300 | 2 | Duplicate identifier（重复标识符） |
+| TS2551/TS2550/TS2339/TS2322 | 各 1 | 属性不存在/lib/类型 |
+
+**踩坑提醒**：配置里 `"assets/scritps/testerror"` **拼写错了**（应为 `scripts`）——工程实际只有 `assets/scripts/testerror`，所以 testerror **完全没被检查**（real 19 不含 testerror 的 23 条错误）。改成 `"assets/scripts/testerror"` 后 testerror 也会纳入。
+
+**教训**：includePath / excludePath 路径必须精确匹配工程实际目录名（区分大小写、别拼错），否则该路径**静默失效**（不报错但漏检）。
+
+**06:57 实测（改对后）**：`"assets/scripts/testerror"` 改对后，real = **42**（语法 2 + 类型 40）= assets/10000 的 19 + testerror 的 23，完全符合预期。noise 91（TS1192:59 proto + TS2503:20 gf + TS2304:12），excluded 1163（includePath 之外）。
+
+**validatePaths 已实施**：为堵住拼写静默失效的坑，compile 启动时校验 includePath/excludePath 路径存在性，不存在的给警告（不阻断 compile）。例：配 `assets/scritps/testerror` 会提示「[警告] 配置里的路径在工程中不存在（可能拼错/大小写）：assets/scritps/testerror」。这样拼错能被立即发现，不再静默漏检。
+
 默认模式 311 real 的 code 分布（实测）：
 
 | code | 数量 | 含义 | 归类 |

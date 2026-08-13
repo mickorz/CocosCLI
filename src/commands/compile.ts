@@ -11,7 +11,7 @@ import {
   ScriptDiagnostic,
 } from '../utils/verify.js';
 import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
-import { readCompileConfig, filterExcludePath, filterIncludePath, type CompileConfig } from '../utils/compile-config.js';
+import { readCompileConfig, filterExcludePath, filterIncludePath, validatePaths, type CompileConfig } from '../utils/compile-config.js';
 
 // compile 命令：调 cocos-mcp run_script_diagnostics 做编译检查，生成 log
 //
@@ -42,6 +42,13 @@ export async function compile(projectDir?: string): Promise<void> {
     process.exit(1);
   }
   const strict = config.strict ?? false;
+
+  // 校验 includePath/excludePath 路径存在性（检出拼错/大小写错，避免静默失效漏检）
+  const missingPaths = validatePaths(dir, config);
+  if (missingPaths.length > 0) {
+    console.log(chalk.yellow(`[警告] 配置里的路径在工程中不存在（可能拼错/大小写）：${missingPaths.join(', ')}`));
+    console.log(chalk.gray('  这些路径过滤不到任何文件，请检查 .cocoscli/compile.config.json 的 includePath/excludePath'));
+  }
 
   const mcpPort = readMcpPort(dir);
   console.log(chalk.cyan(`编译检查（cocos-mcp run_script_diagnostics）`));
