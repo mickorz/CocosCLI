@@ -48,6 +48,22 @@ src/
 3. MCP HTTP server 跑（verifyMcpConnection）
 4. 目标工具可用（调一次看响应结构）
 
+## compile 错误处理最高规则
+
+处理 compile 报错（尤其是「编辑器不报、compile 报」的差异）时，遵循最高规则：
+
+**不要试图判断「这个错误要不要忽略」，而应该先问「我是不是缺少了这个项目真实运行环境的类型信息」。**
+
+- 当 CocosCreator 编辑器不报但 cocoscli compile（纯 tsc）报错时，差距几乎总是**类型信息缺失**，不是代码错误。典型场景：
+  - 运行时全局注入（pfbm/gf 是模块 export 被 cc 模块系统注入全局）→ tsc 缺少 `declare const pfbm/gf`
+  - 构建期注入（xuanwu 由 xuanwu_tools SDK 生成）→ 声明文件不在 tsconfig include 范围
+  - 命名空间别名（gf=gameframe）→ 缺少 `declare namespace gf` / `declare const gf`
+  - 裸模块别名（*Module）→ 缺少 tsconfig paths 映射
+- **正确方向（治本）：补全缺失的类型信息**——加全局声明、补 include、加 paths 映射。补不了的（工程特定 / 声明确实缺失）如实暴露给用户决策。
+- **错误方向（治标）：用启发式降噪 / 分类（频率阈值、多维 suspectedGlobal）去「判断要不要忽略」**。这会误判（复制粘贴的真错也可能高频跨文件），且掩盖了真正缺类型信息的根因。绝不静默吞掉报错。
+
+详见 [Docs/cocoscli-compile-全局变量报错分析.md](../Docs/cocoscli-compile-全局变量报错分析.md)。
+
 ## 开发
 
 ```bash

@@ -6,7 +6,6 @@ import {
   runScriptDiagnosticsViaMcp,
   readMcpPort,
   verifyMcpConnection,
-  ensureVerifyTsconfig,
   classifyDiagnostics,
   ScriptDiagnostic,
 } from '../utils/verify.js';
@@ -15,7 +14,8 @@ import { readCompileConfig, filterExcludePath, filterIncludePath, validatePaths,
 
 // compile 命令：调 cocos-mcp run_script_diagnostics 做编译检查，生成 log
 //
-// 复用 verify 第2步的 runScriptDiagnosticsViaMcp（编辑器内置 tsc + skipLibCheck）
+// P1 忠实模式：cocoscli 不再构造残缺的 verify tsconfig，让 cocos-mcp 直接读工程 tsconfig.json
+// （保留完整类型环境：types/include/paths/strict 按工程原样，cocoscli 不覆盖）
 // 把 diagnostics 写到 .cocoscli/compile-log.txt
 
 /**
@@ -54,7 +54,7 @@ export async function compile(projectDir?: string): Promise<void> {
   console.log(chalk.cyan(`编译检查（cocos-mcp run_script_diagnostics）`));
   console.log(chalk.gray(`工程：${dir}`));
   console.log(chalk.gray(`MCP 端口：${mcpPort}`));
-  console.log(chalk.gray(`模式：${strict ? '严格（strict 全开）' : '默认（对齐编辑器，关 strict）'}（配置：.cocoscli/compile.config.json）\n`));
+  console.log(chalk.gray(`模式：忠实使用工程 tsconfig.json（types/paths/include/strict 按工程原样，cocoscli 不覆盖；compile.config.json strict=${strict} 暂未生效，留待 P1 之后评估）\n`));
 
   // ===== 前置检查（四条链路，任一失败中断 + 提示修复）=====
 
@@ -85,23 +85,17 @@ export async function compile(projectDir?: string): Promise<void> {
   }
   console.log(chalk.gray(`[检查3] CocosMCP HTTP server 可访问（${mcpPort}）`));
 
-  // 检查4：构造 verify tsconfig（让 tsc 真正检查 assets，避免默认 temp/tsconfig.cocos.json
-  //       无 include 字段导致只编译 temp/ 而漏检 assets 脚本错误）
-  const tsconfigSetup = ensureVerifyTsconfig(dir, { strict });
-  if (!tsconfigSetup.written) {
-    // written=false：temp/tsconfig.cocos.json 不存在。若工程根也无 tsconfig.json，cocos-mcp 的
-    // findTsConfig 会返回空 → tsc 跑空 → error=0 假阳性。这里直接拦截，提示开编辑器生成 temp/
-    const rootTsconfig = path.join(dir, 'tsconfig.json');
-    if (!fs.existsSync(rootTsconfig)) {
-      console.log(chalk.red(`[检查4] ${tsconfigSetup.reason}`));
-      console.log(chalk.gray('  且工程根无 tsconfig.json，无法编译检查。请先 cocoscli open 打开 CocosCreator 让它生成 temp/tsconfig.cocos.json。'));
-      process.exit(1);
-    }
-    console.log(chalk.yellow(`[检查4] ${tsconfigSetup.reason}，改用工程根 tsconfig.json`));
-  } else {
-    console.log(chalk.gray(`[检查4] verify tsconfig 已生成：${tsconfigSetup.tsconfigPath}`));
+  // 检查4：确认工程 tsconfig.json 存在。P1 忠实模式：cocoscli 不再构造残缺的 verify tsconfig，
+  //       让 cocos-mcp findTsConfig 默认优先读工程 tsconfig.json（保留完整类型环境：
+  //       types/include/paths/strict 全部按工程原样，cocoscli 不覆盖）
+  const rootTsconfig = path.join(dir, 'tsconfig.json');
+  if (!fs.existsSync(rootTsconfig)) {
+    console.log(chalk.red(`[检查4] 工程根 tsconfig.json 不存在：${rootTsconfig}`));
+    console.log(chalk.gray('  cocoscli compile 忠实使用工程 tsconfig.json 作为类型环境，请确认工程有该文件（Cocos 工程通常自带）。'));
+    process.exit(1);
   }
-  const tsconfigArg = tsconfigSetup.written ? tsconfigSetup.tsconfigPath : undefined;
+  console.log(chalk.gray(`[检查4] 使用工程 tsconfig.json（忠实模式，不构造 verify tsconfig）`));
+  const tsconfigArg = undefined; // 不传 → cocos-mcp findTsConfig 默认优先 project/tsconfig.json
 
   // 检查5：run_script_diagnostics 工具可用（同时拿编译结果）
   const diag = await runScriptDiagnosticsViaMcp(mcpPort, tsconfigArg);
@@ -166,7 +160,7 @@ export async function compile(projectDir?: string): Promise<void> {
     project: dir,
     timestamp: new Date().toISOString(),
     mcpPort,
-    tsconfigPath: tsconfigSetup.tsconfigPath || null,
+    tsconfigPath: 'tsconfig.json',
     ok: classified.real.length === 0,
     errorCount: classified.real.length,
     excludedCount,
