@@ -13,13 +13,14 @@ cocoscli —— 面向 Cocos Creator 3.7.x 的命令行工具。
 | `cocoscli build <platform> [dir]` | 构建打包到指定平台（web-desktop / wechat / douyin 等） |
 | `cocoscli verify <scene> [dir]` | 验证：编译检查 + MCP/preview + opencode 预览场景 |
 | `cocoscli compile [dir]` | 编译检查（cocos-mcp run_script_diagnostics）+ 生成 log |
+| `cocoscli lint [dir]` | ESLint 代码规范检查（忠实工程 .eslintrc.json + tsconfig.eslint.json + 工程本地 ESLint）+ 生成 eslint-log |
 
 ## 架构
 
 ```
 src/
 ├── index.ts           commander 注册命令
-├── commands/          命令入口（init / open / close / remove / build / verify / compile）
+├── commands/          命令入口（init / open / close / remove / build / verify / compile / lint）
 ├── utils/
 │   ├── cocos.ts       5 级查找 CocosCreator + 打开
 │   ├── project.ts     工程判定 + 路径规范化
@@ -27,6 +28,7 @@ src/
 │   ├── git.ts         clone CocosMCP + build + 写配置
 │   ├── build.ts       构建打包
 │   ├── verify.ts      编译检查 + MCP/preview 验证 + opencode 事件流监控（含通用 HTTP 函数）
+│   ├── lint.ts        ESLint 规范检查（工程本地 ESLint + .eslintrc.json，不经 CocosMCP）
 │   ├── spinner.ts     纯文本 spinner（ASCII + [完成]/[失败]）
 │   └── platform.ts    平台判断
 └── __tests__/         vitest 单测

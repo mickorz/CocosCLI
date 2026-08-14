@@ -9,7 +9,8 @@
 //   └─> 有参数  commander.parse()
 //         ├─> init   为当前 Cocos 工程安装 CocosMCP 扩展并打开
 //         ├─> open   用 CocosCreator 打开工程
-//         └─> close  关闭工程对应的 CocosCreator 进程
+//         ├─> close  关闭工程对应的 CocosCreator 进程
+//         └─> ...    build/verify/compile/lint 等检查与工具命令
 
 import { Command } from 'commander';
 import { VERSION } from './version.js';
@@ -20,6 +21,7 @@ import { remove } from './commands/remove.js';
 import { build } from './commands/build.js';
 import { verify } from './commands/verify.js';
 import { compile } from './commands/compile.js';
+import { lint } from './commands/lint.js';
 import { previewScene } from './commands/preview-scene.js';
 import { browserLogs } from './commands/browser-logs.js';
 import { cardShoot } from './commands/card-shoot.js';
@@ -74,6 +76,12 @@ program
   .command('compile [dir]')
   .description('编译检查（cocos-mcp run_script_diagnostics），生成编译报告到 .cocoscli/compile-log.txt。配置见 .cocoscli/compile.config.json')
   .action(async (dir?: string) => compile(dir));
+
+// lint：ESLint 代码规范检查（忠实使用工程 .eslintrc.json + tsconfig.eslint.json + 工程本地 ESLint）
+program
+  .command('lint [dir]')
+  .description('ESLint 代码规范检查（忠实使用工程 .eslintrc.json + tsconfig.eslint.json + 工程本地 ESLint），生成 .cocoscli/eslint-log-*.json')
+  .action(async (dir?: string) => lint(dir));
 
 // previewscene：切换场景并获取预览地址（CocosMCP scene_management + server_information）
 program
