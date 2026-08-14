@@ -402,8 +402,11 @@ export function classifyDiagnostics(
   }
 
   // 第二遍：候选里的 TS2339/TS2551 按 on type 频次
+  // 按外层引号类型匹配到同类型下一个引号，避免 type 内部嵌套引号被截断：
+  //   on type 'typeof import("E:/.../proto")'  外层单引号、内部双引号
+  // 原 [^'"]+ 会在内部双引号处截断成 'typeof import('，导致不同 import type 错误合并
   const typeOf = (e: ScriptDiagnostic): string => {
-    const m = e.message.match(/on type ['"]([^'"]+)['"]/);
+    const m = e.message.match(/on type '([^']+)'/) ?? e.message.match(/on type "([^"]+)"/);
     return m?.[1] ?? '';
   };
   const freq: Record<string, number> = {};

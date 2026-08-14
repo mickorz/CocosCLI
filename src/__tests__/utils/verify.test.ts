@@ -212,4 +212,30 @@ describe('classifyDiagnostics', () => {
     expect(r.syntacticCount).toBe(1);
     expect(r.semanticCount).toBe(1);
   });
+
+  it('TS2339 的 typeof import(...) 嵌套引号 type 完整提取，不同 import 不被错误合并（P3.1 regression）', () => {
+    // 外层单引号包裹 type，内部双引号是 import 路径
+    // 原 [^'"]+ 会在内部双引号截断成 'typeof import('，导致不同 import type 错误合并 > 阈值
+    const msgA = "Property 'a' does not exist on type 'typeof import(\"E:/proto_a\")'.";
+    const msgB = "Property 'b' does not exist on type 'typeof import(\"E:/proto_b\")'.";
+    const diags = [
+      ...Array.from({ length: 3 }, () => mkDiag('TS2339', msgA)),
+      ...Array.from({ length: 3 }, () => mkDiag('TS2339', msgB)),
+    ];
+    const r = classifyDiagnostics(diags);
+    // 不同 import type 不截断不合并；各自 count=3 ≤ 阈值 5 → 全 real
+    expect(r.real).toHaveLength(6);
+    expect(r.noise).toHaveLength(0);
+  });
+
+  it('TS2339 同一 typeof import(...) > 阈值归 noise，byType key 为完整 type 不截断', () => {
+    const msg = "Property 'game_scmj' does not exist on type 'typeof import(\"E:/proto_cm_protocol\")'.";
+    const sameType = Array.from({ length: 6 }, () => mkDiag('TS2339', msg));
+    const r = classifyDiagnostics(sameType);
+    expect(r.noise).toHaveLength(6);
+    const fullType = 'typeof import("E:/proto_cm_protocol")';
+    expect(r.noiseSummary.byType[fullType]).toBe(6);
+    // 不应出现被截断的 'typeof import(' 作为 key
+    expect(r.noiseSummary.byType['typeof import(']).toBeUndefined();
+  });
 });
