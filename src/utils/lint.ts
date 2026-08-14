@@ -338,21 +338,51 @@ export function createEmptyLintResult(dir: string): LintResult {
 // ==================== 编排（真实工程验收） ====================
 
 /**
+ * 在指定目录 cwd 下执行 action，结束后恢复原 cwd（try/finally）
+ *
+ * 背景：@typescript-eslint/parser 解析 parserOptions.project 相对路径用进程 cwd，
+ * 不受 ESLint({cwd}) 影响（ESLint 的 cwd 不传给 parser），必须在工程目录下执行 lint
+ * （等价用户在工程根直接跑 npx eslint 的真实语义）。
+ * chdir 是进程级全局状态，用完必须恢复：防未来 lint 被当库函数调用
+ * （doctor / agent runner / 批量多工程 runner）时污染调用方 cwd 或产生并行竞争。
+ */
+export async function withProjectCwd<T>(dir: string, action: () => Promise<T>): Promise<T> {
+  const originalCwd = process.cwd();
+  process.chdir(dir);
+  try {
+    return await action();
+  } finally {
+    process.chdir(originalCwd);
+  }
+}
+
+/**
  * 对 Cocos 工程执行 ESLint 检查，返回标准化 LintResult
  *
- * 保证不 throw：所有环境异常（eslint 模块加载失败、lintFiles 抛错）都转 environmentErrors。
+ * 保证不 throw：所有环境异常（eslint 模块加载失败、lintFiles 抛错、chdir 失败）
+ * 都转 environmentErrors。
  * 忠实模式：工程 .eslintrc.json + 工程本地 eslint，ignorePatterns/overrides 原样生效。
  */
 export async function lintProject(dir: string): Promise<LintResult> {
   const result = createEmptyLintResult(dir);
   result.parserProject = readParserProject(dir);
 
-  // 切到工程目录：@typescript-eslint/parser 解析 parserOptions.project 相对路径用进程 cwd，
-  // 不受 ESLint({cwd}) 影响（ESLint 的 cwd 不传给 parser）。
-  // 不 chdir 会把 './tsconfig.eslint.json' 解析到 cocoscli 进程目录 → 全量 Parsing error。
-  // 这也等价于用户在工程根目录直接跑 npx eslint 的真实语义。
-  process.chdir(dir);
+  try {
+    return await withProjectCwd(dir, () => lintWithProjectEslint(dir, result));
+  } catch (e) {
+    // 兜底（如 chdir 失败）：不吞错，转环境错误
+    result.environmentErrors.push({
+      code: LINT_ENV_ERRORS.ESLINT_RUN_ERROR,
+      message: `lint 执行失败：${errorMessage(e)}`,
+    });
+    return result;
+  }
+}
 
+/**
+ * 在工程 cwd 下用工程本地 ESLint 执行 lint 并标准化结果（lintProject 的主体）
+ */
+async function lintWithProjectEslint(dir: string, result: LintResult): Promise<LintResult> {
   // 加载工程本地 eslint（preflight 已验证可解析，这里模块体执行失败也转环境错误）
   let ESLintCtor: EslintClass;
   try {

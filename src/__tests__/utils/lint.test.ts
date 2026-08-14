@@ -11,6 +11,7 @@ import {
   aggregateRuleSummary,
   aggregateFileSummary,
   createEmptyLintResult,
+  withProjectCwd,
   LINT_ENV_ERRORS,
   LintIssue,
 } from '../../utils/lint.js';
@@ -346,5 +347,35 @@ describe('normalizeMessage snippet（真实临时文件）', () => {
   it('文件不存在 → snippet 空串（不炸）', () => {
     const { issue } = normalizeMessage(mkMsg(), path.join(tmpDir(), 'missing.ts'), 'missing.ts');
     expect(issue?.snippet).toBe('');
+  });
+});
+
+// ---------- withProjectCwd（chdir 副作用必须 try/finally 恢复） ----------
+
+describe('withProjectCwd', () => {
+  it('action 内 cwd 切到指定目录，结束后恢复原 cwd', async () => {
+    const original = process.cwd();
+    const dir = tmpDir();
+    let cwdInside = '';
+    await withProjectCwd(dir, async () => {
+      cwdInside = process.cwd();
+      return 42;
+    }).then((value) => {
+      // 返回值透传
+      expect(value).toBe(42);
+    });
+    expect(path.resolve(cwdInside)).toBe(path.resolve(dir));
+    expect(path.resolve(process.cwd())).toBe(path.resolve(original));
+  });
+
+  it('action 抛错 → finally 仍恢复原 cwd，错误向上抛', async () => {
+    const original = process.cwd();
+    const dir = tmpDir();
+    await expect(
+      withProjectCwd(dir, async () => {
+        throw new Error('boom');
+      })
+    ).rejects.toThrow('boom');
+    expect(path.resolve(process.cwd())).toBe(path.resolve(original));
   });
 });
