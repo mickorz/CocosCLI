@@ -22,18 +22,20 @@ export function readSnippet(filePath: string, line: number, contextLines = 1): s
 /**
  * 写编译 log（JSON 格式 + 文件名带时间戳，方便 jq 筛选）
  * @param dir 工程根目录（写到 .cocoscli/）
- * @param prefix 文件名前缀（如 compile-log- / eslint-log- / verify-compile-round-1-）
+ * @param prefix 文件名前缀（如 compile-log- / eslint-log- / build-log-）
  * @param data log 内容（JSON 序列化，任意对象）
+ * @param timestamp 可选：外部时间戳（build 用它让 build-log JSON 与 build-raw log 同名配对）
  * @returns log 文件完整路径
  */
 export function writeCompileLog(
   dir: string,
   prefix: string,
-  data: unknown
+  data: unknown,
+  timestamp?: string
 ): string {
   const logDir = path.join(dir, '.cocoscli');
   fs.mkdirSync(logDir, { recursive: true });
-  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const ts = timestamp ?? new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const logPath = path.join(logDir, `${prefix}${ts}.json`);
   fs.writeFileSync(logPath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
   return logPath;

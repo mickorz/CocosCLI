@@ -62,7 +62,7 @@ program
 // build：构建工程到指定平台
 program
   .command('build <platform> [dir]')
-  .description('构建工程到指定平台（web/web-desktop、web-mobile、wechat、douyin 等），dir 省略时为当前目录')
+  .description('构建工程到指定平台（web/web-desktop、web-mobile、wechat、douyin 等），生成 build-log，dir 省略时为当前目录')
   .action((platform: string, dir?: string) => build(dir, platform));
 
 // verify：验证工程（编译检查 + MCP/preview 验证 + opencode 预览场景）
