@@ -42,7 +42,6 @@ export async function compile(projectDir?: string): Promise<void> {
     console.log(chalk.gray('  请检查配置文件 JSON 格式（如 { "strict": true }）'));
     process.exit(1);
   }
-  const strict = config.strict ?? false;
 
   // 校验 includePath/excludePath 路径存在性（检出拼错/大小写错，避免静默失效漏检）
   const missingPaths = validatePaths(dir, config);
@@ -55,7 +54,7 @@ export async function compile(projectDir?: string): Promise<void> {
   console.log(chalk.cyan(`编译检查（cocos-mcp run_script_diagnostics）`));
   console.log(chalk.gray(`工程：${dir}`));
   console.log(chalk.gray(`MCP 端口：${mcpPort}`));
-  console.log(chalk.gray(`模式：忠实使用工程 tsconfig.json（types/paths/include/strict 按工程原样，cocoscli 不覆盖；compile.config.json strict=${strict} 暂未生效，留待 P1 之后评估）\n`));
+  console.log(chalk.gray(`模式：忠实使用工程 tsconfig.json（types/paths/include/strict 按工程原样，cocoscli 不覆盖）\n`));
 
   // ===== 前置检查（四条链路，任一失败中断 + 提示修复）=====
 
@@ -98,12 +97,20 @@ export async function compile(projectDir?: string): Promise<void> {
   console.log(chalk.gray(`[检查4] 使用工程 tsconfig.json（忠实模式，不构造 verify tsconfig）`));
   const tsconfigArg = undefined; // 不传 → cocos-mcp findTsConfig 默认优先 project/tsconfig.json
 
-  // P2: 生成 runtime globals bridge（virtual declaration，不落盘，仅 checker 可见）
-  // 由 compile.config.json 的 runtimeGlobals 生成强类型 bridge（declare const <name>: typeof import("<module>").<export>;）
+  // P2/P3: 生成 runtime globals bridge（virtual declaration，不落盘，仅 checker 可见）
+  // moduleExport: declare const <name>: typeof import("<module>").<export>;
+  // namespaceAlias: import <name> = <target>;
   const runtimeGlobalsDecl = buildRuntimeGlobalsDeclaration(config.runtimeGlobals);
   const virtualDeclarations = runtimeGlobalsDecl ? [runtimeGlobalsDecl] : undefined;
   if (virtualDeclarations) {
-    console.log(chalk.gray(`[P2] runtime globals bridge 已生成（virtual，不落盘）：${Object.keys(config.runtimeGlobals ?? {}).join(', ')}`));
+    console.log(chalk.gray('[P2/P3] runtime globals bridge 已生成（virtual，不落盘）：'));
+    for (const [name, g] of Object.entries(config.runtimeGlobals ?? {})) {
+      if (g.kind === 'moduleExport') {
+        console.log(chalk.gray(`  ${name} -> ${g.module}.${g.export} (moduleExport)`));
+      } else {
+        console.log(chalk.gray(`  ${name} -> ${g.target} (namespaceAlias)`));
+      }
+    }
   }
 
   // 检查5：run_script_diagnostics 工具可用（同时拿编译结果）
