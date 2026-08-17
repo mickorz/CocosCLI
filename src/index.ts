@@ -113,7 +113,14 @@ program
   .option('-f, --file <path>', '从文件读代码（优先于 code 参数）')
   .option('--timeout <ms>', '执行超时毫秒（默认 120000）', (v: string) => parseInt(v, 10))
   .action(async (code: string | undefined, dir?: string, options?: Record<string, unknown>) => {
-    await evalScript(code, dir, options as Parameters<typeof evalScript>[2]);
+    // -f 传了文件时 code 位置参数无意义，用户容易把工程目录直接放第一个
+    //（cocoscli eval -f x.js <dir> 会被 commander 解析成 code=<dir>），这里归位
+    const opts = options as Record<string, unknown> | undefined;
+    if (opts?.file && code !== undefined && dir === undefined) {
+      dir = code;
+      code = undefined;
+    }
+    await evalScript(code, dir, opts as Parameters<typeof evalScript>[2]);
   });
 
 // browserlogs：读取 CDP Chrome 中预览页的控制台日志（cdp-cli console）
