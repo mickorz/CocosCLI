@@ -288,6 +288,112 @@ export async function runScriptDiagnosticsViaMcp(
   return { errors: diagnostics, environmentErrors, ran: true };
 }
 
+// ==================== cocos-mcp execute_script（eval 任意代码执行） ====================
+
+/** eval 请求体（buildEvalRequest 纯函数产物，便于单测） */
+export interface EvalRequest {
+  context: 'scene' | 'editor';
+  code: string;
+  args: Record<string, unknown>;
+}
+
+/**
+ * 构建 execute_script 请求体（纯函数）
+ *
+ * context 归一化：'editor' -> editor，其余（undefined/乱串/scene）-> scene。
+ * argsJson 传入时必须是合法 JSON 对象串，否则返回 {error}（调用方红字退出）。
+ */
+export function buildEvalRequest(
+  context: string | undefined,
+  code: string,
+  argsJson: string | undefined
+): EvalRequest | { error: string } {
+  let args: Record<string, unknown> = {};
+  if (argsJson !== undefined && argsJson !== '') {
+    try {
+      const parsed = JSON.parse(argsJson);
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { error: `--args 必须是 JSON 对象串，收到：${argsJson}` };
+      }
+      args = parsed as Record<string, unknown>;
+    } catch {
+      return { error: `--args 不是合法 JSON：${argsJson}` };
+    }
+  }
+  return {
+    context: context === 'editor' ? 'editor' : 'scene',
+    code,
+    args,
+  };
+}
+
+/** execute_script 统一结果（ran=工具链路是否打通，ok=用户代码是否执行成功） */
+export interface EvalOutcome {
+  ran: boolean;
+  ok: boolean;
+  data?: unknown;
+  error?: string;
+  message?: string;
+}
+
+/**
+ * 解析 execute_script 工具响应为统一结果（纯函数）
+ *
+ * Simple API 两种包络都要兜住：
+ *   成功：{success:true, tool, result:{success, data, message}}
+ *   工具抛错（HTTP 500）：{success:false, error, tool}（无 result 字段）
+ * 判断顺序：先看 resp.result 是否对象，再看 result.success。
+ */
+export function parseEvalResponse(resp: Record<string, unknown> | null): EvalOutcome {
+  if (!resp) {
+    return { ran: false, ok: false, error: '执行超时或服务器无响应（可用 --timeout 调大）' };
+  }
+  const result = resp.result;
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    return {
+      ran: false,
+      ok: false,
+      error: typeof resp.error === 'string' ? resp.error : JSON.stringify(resp),
+    };
+  }
+  const r = result as Record<string, unknown>;
+  if (r.success === true) {
+    return {
+      ran: true,
+      ok: true,
+      data: r.data,
+      message: typeof r.message === 'string' ? r.message : undefined,
+    };
+  }
+  return {
+    ran: true,
+    ok: false,
+    error: typeof r.error === 'string' ? r.error : JSON.stringify(r),
+  };
+}
+
+/**
+ * 调 cocos-mcp execute_script 执行任意 JS（scene/editor 双上下文）
+ * 端点：POST http://127.0.0.1:{mcpPort}/api/script/execute_script
+ *
+ * 用户代码不可预估（可能含 await 资源加载/定时器轮询），timeout 默认 120 秒
+ * （compile 先例 60 秒是全量编译；eval 给 2 分钟，CLI --timeout 可覆盖）。
+ */
+export async function executeScriptViaMcp(
+  mcpPort: number,
+  code: string,
+  context: 'scene' | 'editor' = 'scene',
+  args: Record<string, unknown> = {},
+  timeoutMs = 120000
+): Promise<EvalOutcome> {
+  const resp = await httpPostJson(
+    `http://127.0.0.1:${mcpPort}/api/script/execute_script`,
+    { context, code, args },
+    timeoutMs
+  );
+  return parseEvalResponse(resp);
+}
+
 // ==================== verify tsconfig 构造（让 tsc 真正检查 assets） ====================
 
 export interface VerifyTsconfigSetup {

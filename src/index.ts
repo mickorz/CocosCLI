@@ -25,6 +25,7 @@ import { verify } from './commands/verify.js';
 import { compile } from './commands/compile.js';
 import { lint } from './commands/lint.js';
 import { previewScene } from './commands/preview-scene.js';
+import { evalScript } from './commands/eval.js';
 import { browserLogs } from './commands/browser-logs.js';
 import { cardShoot } from './commands/card-shoot.js';
 import { doctor } from './commands/doctor.js';
@@ -100,6 +101,20 @@ program
   .command('previewscene <scene> [dir]')
   .description('切换场景并获取预览地址（CocosMCP），在浏览器打开预览')
   .action(async (scene: string, dir?: string) => previewScene(scene, dir));
+
+// eval：在编辑器内执行任意 JS（CocosMCP execute_script，scene/editor 双上下文）
+// PowerShell 引号提示：外层用单引号（双引号会吃 JS 模板串 ${} 插值），JS 内部字符串用双引号；
+// 长脚本推荐 -f 文件入口规避一切转义
+program
+  .command('eval [code] [dir]')
+  .description('在编辑器内执行任意 JS（scene 上下文注入 require/cc/Editor/scene/director/args，editor 上下文注入 require/Editor/args/fs/path/os），三出口：直接 return / run(env) / module.exports，写 eval-log')
+  .option('--context <ctx>', '执行上下文（scene|editor，默认 scene）')
+  .option('--args <json>', '传给代码的 args 参数（JSON 对象串）')
+  .option('-f, --file <path>', '从文件读代码（优先于 code 参数）')
+  .option('--timeout <ms>', '执行超时毫秒（默认 120000）', (v: string) => parseInt(v, 10))
+  .action(async (code: string | undefined, dir?: string, options?: Record<string, unknown>) => {
+    await evalScript(code, dir, options as Parameters<typeof evalScript>[2]);
+  });
 
 // browserlogs：读取 CDP Chrome 中预览页的控制台日志（cdp-cli console）
 program
