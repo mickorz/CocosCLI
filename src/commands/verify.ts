@@ -233,7 +233,7 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
 
   // 第3步：MCP + preview 验证（preview 用动态 previewUrl，调 cocos-mcp server_information 查真实地址）
   console.log(chalk.blue('\n第3步 验证 MCP 与 preview'));
-  const mcpOk = await verifyMcpConnection();
+  const mcpOk = await verifyMcpConnection(mcpPort);
   const previewUrl = await fetchPreviewUrl(mcpPort);
   let previewOk = false;
   if (previewUrl) {
@@ -246,11 +246,11 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
       await sleep(3000);
     }
   }
-  console.log(chalk.gray(`  MCP (3001/health)：${mcpOk ? '可访问' : '不可访问'}`));
+  console.log(chalk.gray(`  MCP (${mcpPort}/health)：${mcpOk ? '可访问' : '不可访问'}`));
   console.log(chalk.gray(`  preview (${previewUrl || '未获取到'})：${previewOk ? '可访问' : '不可访问'}`));
   report.push(
     '## 第3步 MCP 与 preview 验证',
-    `- MCP (3001/health)：${mcpOk ? '可访问' : '不可访问'}`,
+    `- MCP (${mcpPort}/health)：${mcpOk ? '可访问' : '不可访问'}`,
     `- preview (${previewUrl || '未获取到'})：${previewOk ? '可访问' : '不可访问'}`,
     ''
   );
