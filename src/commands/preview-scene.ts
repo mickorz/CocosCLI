@@ -13,6 +13,7 @@ import {
 } from '../utils/verify.js';
 import { ensureCdpCli } from '../utils/dep-check.js';
 import { runCdpCliSync } from '../utils/cdp-cli.js';
+import { checkCocosMcpDeps } from '../utils/git.js';
 
 // previewscene 命令：CocosMCP 切场景 + cdp-cli 在 CDP Chrome 打开预览
 //
@@ -55,14 +56,21 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
 
   // ===== 前置检查 =====
 
-  // 检查1：CocosMCP 已装
+  // 检查1：CocosMCP 已装（目录 + node_modules 运行时依赖）
   const cocosMcpDir = path.join(dir, 'extensions', 'CocosMCP');
   if (!fs.existsSync(cocosMcpDir)) {
     console.log(chalk.red('[检查1] CocosMCP 未安装'));
     console.log(chalk.gray(`  先跑 cocoscli init。`));
     process.exit(1);
   }
-  console.log(chalk.gray('[检查1] CocosMCP 已安装'));
+  const deps = checkCocosMcpDeps(cocosMcpDir);
+  if (!deps.ok) {
+    console.log(chalk.red(`[检查1] CocosMCP node_modules 缺失（${deps.missing.join(', ')}）`));
+    console.log(chalk.gray(`  编辑器面板会报 Cannot find module，MCP HTTP server 起不来。`));
+    console.log(chalk.gray(`  在 ${cocosMcpDir} 跑 npm install，或重跑 cocoscli init。`));
+    process.exit(1);
+  }
+  console.log(chalk.gray('[检查1] CocosMCP 已安装且依赖齐全'));
 
   // 检查2：MCP HTTP server 跑
   const mcpOk = await verifyMcpConnection(mcpPort);

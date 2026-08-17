@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
+import { checkCocosMcpDeps } from '../utils/git.js';
 import {
   runScriptDiagnosticsViaMcp,
   readMcpPort,
@@ -67,14 +68,21 @@ export async function compile(projectDir?: string): Promise<void> {
   }
   console.log(chalk.gray('[检查1] CocosMCP 已安装'));
 
-  // 检查2：CocosMCP 已 build（dist/tools/diagnostics.js）
+  // 检查2：CocosMCP 已 build（dist/tools/diagnostics.js + node_modules 运行时依赖）
   const diagnosticsJs = path.join(cocosMcpDir, 'dist', 'tools', 'diagnostics.js');
   if (!fs.existsSync(diagnosticsJs)) {
     console.log(chalk.red('[检查2] CocosMCP 未 build（dist/tools/diagnostics.js 不存在）'));
     console.log(chalk.gray(`  在 ${cocosMcpDir} 跑 npm install + npm run build。`));
     process.exit(1);
   }
-  console.log(chalk.gray('[检查2] CocosMCP 已 build（含 diagnostics）'));
+  const deps = checkCocosMcpDeps(cocosMcpDir);
+  if (!deps.ok) {
+    console.log(chalk.red(`[检查2] CocosMCP node_modules 缺失（${deps.missing.join(', ')}）`));
+    console.log(chalk.gray('  编辑器面板会报 Cannot find module，MCP HTTP server 起不来。'));
+    console.log(chalk.gray(`  在 ${cocosMcpDir} 跑 npm install，或重跑 cocoscli init。`));
+    process.exit(1);
+  }
+  console.log(chalk.gray('[检查2] CocosMCP 已 build 且依赖齐全（dist + node_modules）'));
 
   // 检查3：CocosCreator 已开（MCP HTTP server 在跑）
   const mcpOk = await verifyMcpConnection(mcpPort);

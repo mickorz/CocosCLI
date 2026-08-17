@@ -1,9 +1,17 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import { createSpinner, spinnerSucceed, spinnerFail } from '../utils/spinner.js';
 import { getCocosCreatorPath, openCocosProject } from '../utils/cocos.js';
 import { isCocosProject } from '../utils/project.js';
-import { cloneCocosMcp, buildCocosMcp, writeDefaultMcpServerConfig, writeOpencodePermission } from '../utils/git.js';
+import {
+  cloneCocosMcp,
+  buildCocosMcp,
+  checkCocosMcpDeps,
+  COCOS_MCP_DIR,
+  writeDefaultMcpServerConfig,
+  writeOpencodePermission,
+} from '../utils/git.js';
 
 /**
  * init 命令：为指定 Cocos 工程安装 CocosMCP 扩展并打开
@@ -12,7 +20,7 @@ import { cloneCocosMcp, buildCocosMcp, writeDefaultMcpServerConfig, writeOpencod
  *   1. 定位 CocosCreator（5 级查找，找不到则报错退出）
  *   2. 判定目标目录是否 Cocos 3.x 工程（不是则中止）
  *   3. 安装 CocosMCP 到 extensions/CocosMCP（优先 vendor/deps copy，fallback 远端）
- *   4. 构建 CocosMCP（npm install + build，生成 dist，否则 CocosCreator 加载报错）
+ *   4. 构建 CocosMCP（npm install + build，生成 dist；全新安装或依赖/dist 缺失才跑，按需构建）
  *   5. 写入默认 mcp-server.json 到 settings/（已存在则跳过）
  *   6. 写入默认 opencode.json 到工程根（放开 external_directory 权限，供 verify 使用）
  *   7. 打开工程（复用 open 的核心函数）
@@ -40,8 +48,10 @@ export function init(projectDir?: string, port = 3001, noLogin = true): void {
 
   // 第三步：安装 CocosMCP 到 extensions（优先 vendor/deps copy，fallback git clone）
   const spinner = createSpinner('安装 CocosMCP 扩展...').start();
+  let installStatus: 'cloned' | 'exists';
   try {
     const result = cloneCocosMcp(dir);
+    installStatus = result.status;
     const msg = result.status === 'cloned' ? 'CocosMCP 安装完成（来自 vendor/deps copy）' : 'CocosMCP 已存在（如需更新跑 cocoscli remove + init）';
     spinnerSucceed(spinner, msg);
   } catch (e) {
@@ -51,15 +61,27 @@ export function init(projectDir?: string, port = 3001, noLogin = true): void {
     process.exit(1);
   }
 
-  // 第四步：构建 CocosMCP（npm install + build，生成 dist）
-  console.log(chalk.cyan('构建 CocosMCP 扩展（npm install + build，可能需要 1-2 分钟）...'));
-  try {
-    buildCocosMcp(dir);
-    console.log(chalk.green('[完成] CocosMCP 构建成功'));
-  } catch (e) {
-    console.log(chalk.red('[失败] CocosMCP 构建失败'));
-    console.log(chalk.red(e instanceof Error ? e.message : String(e)));
-    process.exit(1);
+  // 第四步：构建 CocosMCP（npm install + build，生成 dist）——按需构建
+  // 全新安装（cloned）、或已存在但 node_modules/dist 缺失（上次构建中断 / 手动复制漏装）才跑，
+  // 避免「上次 init 构建失败 exit 后残留半成品，重跑走 exists 分支永远不补 install」的死角
+  const extDir = path.join(dir, 'extensions', COCOS_MCP_DIR);
+  const depsOk = checkCocosMcpDeps(extDir).ok;
+  const distReady = fs.existsSync(path.join(extDir, 'dist', 'main.js'));
+  if (installStatus === 'cloned' || !depsOk || !distReady) {
+    if (installStatus === 'exists' && (!depsOk || !distReady)) {
+      console.log(chalk.yellow('检测到 CocosMCP node_modules 或 dist 缺失（上次构建未完成或手动复制漏装），补跑构建...'));
+    }
+    console.log(chalk.cyan('构建 CocosMCP 扩展（npm install + build，可能需要 1-2 分钟）...'));
+    try {
+      buildCocosMcp(dir);
+      console.log(chalk.green('[完成] CocosMCP 构建成功'));
+    } catch (e) {
+      console.log(chalk.red('[失败] CocosMCP 构建失败'));
+      console.log(chalk.red(e instanceof Error ? e.message : String(e)));
+      process.exit(1);
+    }
+  } else {
+    console.log(chalk.gray('CocosMCP 已构建且依赖齐全，跳过 npm install + build（更新走 cocoscli remove + init）'));
   }
 
   // 第五步：写入默认 mcp-server.json（CocosMCP 服务器配置，已存在则跳过）

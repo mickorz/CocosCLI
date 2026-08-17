@@ -19,6 +19,7 @@ import {
 } from '../utils/verify.js';
 import { findCocosProcesses, isProjectMatch } from '../utils/process.js';
 import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
+import { checkCocosMcpDeps } from '../utils/git.js';
 
 // verify 命令：编排四步验证
 //
@@ -109,6 +110,19 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
     await sleep(5000);
   }
   console.log(chalk.gray(`  CocosMCP ${mcpReady ? '已就绪' : '未就绪（超时，后续 MCP 验证可能失败）'}`));
+  // 未就绪时追查根因：扩展没装 / 手动复制漏 node_modules（面板 Cannot find module → MCP 起不来）
+  if (!mcpReady) {
+    const extDir = path.join(dir, 'extensions', 'CocosMCP');
+    if (!fs.existsSync(extDir)) {
+      console.log(chalk.yellow(`  [提示] ${extDir} 不存在，先跑 cocoscli init。`));
+    } else {
+      const deps = checkCocosMcpDeps(extDir);
+      if (!deps.ok) {
+        console.log(chalk.yellow(`  [提示] CocosMCP node_modules 缺失（${deps.missing.join(', ')}），编辑器面板会报 Cannot find module。`));
+        console.log(chalk.yellow(`  在 ${extDir} 跑 npm install，或重跑 cocoscli init。`));
+      }
+    }
+  }
 
   // 第2步：编译检查 + 自动修复循环（调 cocos-mcp run_script_diagnostics，用编辑器内置 tsc）
   // 降噪后只把 real 喂给 opencode（避免 2 万第三方库声明噪音灌爆修复循环）

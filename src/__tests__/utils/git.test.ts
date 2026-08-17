@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { cloneCocosMcp, writeDefaultMcpServerConfig } from '../../utils/git.js';
+import { cloneCocosMcp, writeDefaultMcpServerConfig, checkCocosMcpDeps } from '../../utils/git.js';
 
 describe('cloneCocosMcp', () => {
   let tmp: string;
@@ -55,5 +55,47 @@ describe('writeDefaultMcpServerConfig', () => {
       fs.readFileSync(path.join(tmp, 'settings', 'mcp-server.json'), 'utf-8')
     );
     expect(content).toEqual({ port: 9999 });
+  });
+});
+
+describe('checkCocosMcpDeps', () => {
+  let extDir: string;
+
+  beforeEach(() => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cocoscli-deps-'));
+    extDir = path.join(tmp, 'extensions', 'CocosMCP');
+    fs.mkdirSync(extDir, { recursive: true });
+    // CocosMCP 真实 dependencies 子集（面板运行时 require 的依赖）
+    fs.writeFileSync(
+      path.join(extDir, 'package.json'),
+      JSON.stringify({ dependencies: { 'fs-extra': '^11.3.0', uuid: '^9.0.1' } }),
+      'utf-8'
+    );
+  });
+  afterEach(() => {
+    fs.rmSync(path.dirname(path.dirname(extDir)), { recursive: true, force: true });
+  });
+
+  it('依赖齐全时 ok', () => {
+    fs.mkdirSync(path.join(extDir, 'node_modules', 'fs-extra'), { recursive: true });
+    fs.mkdirSync(path.join(extDir, 'node_modules', 'uuid'), { recursive: true });
+    expect(checkCocosMcpDeps(extDir)).toEqual({ ok: true, missing: [] });
+  });
+
+  it('缺 fs-extra 时精准点名（对齐真实事故报错名）', () => {
+    fs.mkdirSync(path.join(extDir, 'node_modules', 'uuid'), { recursive: true });
+    expect(checkCocosMcpDeps(extDir)).toEqual({ ok: false, missing: ['fs-extra'] });
+  });
+
+  it('node_modules 整个缺失时全部点名', () => {
+    expect(checkCocosMcpDeps(extDir)).toEqual({
+      ok: false,
+      missing: ['fs-extra', 'uuid'],
+    });
+  });
+
+  it('package.json 不存在时抛错（错误消息含路径，精准暴露）', () => {
+    fs.rmSync(path.join(extDir, 'package.json'));
+    expect(() => checkCocosMcpDeps(extDir)).toThrow(/package\.json/);
   });
 });

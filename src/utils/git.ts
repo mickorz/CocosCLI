@@ -17,6 +17,9 @@ import { fileURLToPath } from 'url';
 //
 // buildCocosMcp(projectPath)
 //        └─> npm install + npm run build（生成 dist，否则 CocosCreator 加载报错）
+//
+// checkCocosMcpDeps(extDir)
+//        └─> 按 package.json dependencies 逐项查 node_modules/<name>（手动复制漏装检出）
 
 /** CocosMCP 扩展仓库地址（fallback：vendor/deps 都不存在时用，GitHub） */
 export const COCOS_MCP_URL = 'https://github.com/mickorz/CocosMCP.git';
@@ -113,6 +116,34 @@ export function buildCocosMcp(projectPath: string): void {
   }
   execSync('npm install --no-fund --no-audit', { cwd: extDir, stdio: 'inherit' });
   execSync('npm run build', { cwd: extDir, stdio: 'inherit' });
+}
+
+/** CocosMCP 运行时依赖检测结果 */
+export interface CocosMcpDepsStatus {
+  ok: boolean;
+  missing: string[];  // 缺失的依赖名（红字提示精准点名，如 fs-extra）
+}
+
+/**
+ * 检查 extensions/CocosMCP 的 node_modules 运行时依赖是否齐全
+ *
+ * 按 extDir/package.json 的 dependencies 逐项查 node_modules/<name> 存在性。
+ * 背景：init 的 copy 排除 node_modules（COPY_EXCLUDE，正常由第四步 npm install 补），
+ * 但用户手动复制扩展目录常漏 node_modules → 编辑器面板报 Cannot find module 'fs-extra'
+ * → MCP 起不来 → compile/verify 只能看到「HTTP server 不可访问」，根因被淹没。
+ * 依赖集合随 CocosMCP package.json 自动跟随，比查单个标记文件稳。
+ *
+ * @param extDir extensions/CocosMCP 绝对路径（调用方已确保目录存在）
+ * @throws package.json 不存在/不可读时抛错（错误消息含路径，精准指向根因，不吞错）
+ */
+export function checkCocosMcpDeps(extDir: string): CocosMcpDepsStatus {
+  const pkgPath = path.join(extDir, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as {
+    dependencies?: Record<string, string>;
+  };
+  const deps = Object.keys(pkg.dependencies ?? {});
+  const missing = deps.filter((d) => !fs.existsSync(path.join(extDir, 'node_modules', d)));
+  return { ok: missing.length === 0, missing };
 }
 
 /** 默认 mcp-server.json 配置（CocosMCP 扩展服务器设置） */
