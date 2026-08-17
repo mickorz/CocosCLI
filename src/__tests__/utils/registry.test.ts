@@ -7,6 +7,8 @@ import {
   readProjects,
   upsertProject,
   removeProject,
+  findPortOccupant,
+  findAvailablePort,
   RegisteredProject,
 } from '../../utils/registry.js';
 
@@ -92,5 +94,34 @@ describe('registry', () => {
     const before = fs.readFileSync(registryPath, 'utf-8');
     expect(removeProject(registryPath, 'E:\\proj\\不存在')).toBe(false);
     expect(fs.readFileSync(registryPath, 'utf-8')).toBe(before);
+  });
+
+  it('findPortOccupant：命中占用该端口的其他工程，excludeDir 不和自己比', () => {
+    const mine = makeProject(); // port 3001
+    const other = makeProject({ dir: 'E:\\proj\\other', port: 3002 });
+    upsertProject(registryPath, mine);
+    upsertProject(registryPath, other);
+    expect(findPortOccupant(registryPath, 3002)?.dir).toBe('E:\\proj\\other');
+    expect(findPortOccupant(registryPath, 3001, mine.dir)).toBeNull(); // 排除自己
+    expect(findPortOccupant(registryPath, 9999)).toBeNull(); // 无人占用
+  });
+
+  it('findAvailablePort：从 3001 起跳过已占用端口', () => {
+    upsertProject(registryPath, makeProject({ dir: 'E:\\proj\\a', port: 3001 }));
+    upsertProject(registryPath, makeProject({ dir: 'E:\\proj\\b', port: 3003 }));
+    expect(findAvailablePort(registryPath)).toBe(3002); // 跳过 3001，3003 被占则下一轮验证
+  });
+
+  it('findAvailablePort：连续占用时顺延到下一个空闲口，excludeDir 排除自己', () => {
+    upsertProject(registryPath, makeProject({ dir: 'E:\\proj\\a', port: 3001 }));
+    upsertProject(registryPath, makeProject({ dir: 'E:\\proj\\b', port: 3002 }));
+    // 自己占着 3001，重跑 init 不该和自己比 → 3001 视为空闲
+    expect(findAvailablePort(registryPath, 'E:\\proj\\a')).toBe(3001);
+    // 无 exclude：3001/3002 都被占 → 3003
+    expect(findAvailablePort(registryPath)).toBe(3003);
+  });
+
+  it('注册表为空时 findAvailablePort 返回 3001（首工程拿默认口）', () => {
+    expect(findAvailablePort(registryPath)).toBe(3001);
   });
 });

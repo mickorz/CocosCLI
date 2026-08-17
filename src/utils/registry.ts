@@ -8,7 +8,9 @@ import * as os from 'os';
 //        ├─> getRegistryPath(home)   ~/.cocoscli/projects.json（home 参数化便于单测）
 //        ├─> readProjects(path)      读全部记录（文件不存在返回 []，坏 JSON 抛错）
 //        ├─> upsertProject(...)      init 第八步：同 dir 更新（版本/端口/时间刷新），否则追加
-//        └─> removeProject(...)      remove 第五步：按精确 dir 移除（不存在不写文件）
+//        ├─> removeProject(...)      remove 第五步：按精确 dir 移除（不存在不写文件）
+//        ├─> findPortOccupant(...)   查端口被哪个工程占用（init 撞车警告用）
+//        └─> findAvailablePort(...)  从 3001 起找空闲端口（init 未传 -p 时自动错开）
 
 /** 单个已注册工程 */
 export interface RegisteredProject {
@@ -97,4 +99,54 @@ export function removeProject(registryPath: string, dir: string): boolean {
   projects.splice(idx, 1);
   writeProjects(registryPath, projects);
   return true;
+}
+
+/**
+ * 查端口被哪个已注册工程占用
+ *
+ * @param registryPath 配置文件路径
+ * @param port 端口号
+ * @param excludeDir 排除的工程目录（本工程重跑 init 时不和自己比）
+ * @returns 占用该端口的记录；无人占用返回 null
+ */
+export function findPortOccupant(
+  registryPath: string,
+  port: number,
+  excludeDir?: string
+): RegisteredProject | null {
+  const hit = readProjects(registryPath).find(
+    (p) => p.port === port && p.dir !== excludeDir
+  );
+  return hit ?? null;
+}
+
+/** 候选端口池起始值（与 CocosMCP 默认端口一致，从 3001 往后找） */
+const PORT_POOL_START = 3001;
+
+/** 候选端口池长度（3001-3100，足够百个工程错开） */
+const PORT_POOL_SIZE = 100;
+
+/**
+ * 从 3001 起在已注册端口中找一个未被占用的端口
+ *
+ * init 未显式传 -p 时用它自动错开多工程端口冲突。
+ * 只查注册表占用；真实端口是否被无关进程监听由编辑器启动后
+ * CocosMCP 的启动日志/health 检查暴露，不在写入时猜测。
+ *
+ * @param registryPath 配置文件路径
+ * @param excludeDir 排除的工程目录（本工程已有记录时不和自己比）
+ * @returns 空闲端口号（3001-3100 池内必有，注册记录数 < 池大小）
+ */
+export function findAvailablePort(registryPath: string, excludeDir?: string): number {
+  const used = new Set(
+    readProjects(registryPath)
+      .filter((p) => p.dir !== excludeDir)
+      .map((p) => p.port)
+  );
+  for (let port = PORT_POOL_START; port < PORT_POOL_START + PORT_POOL_SIZE; port++) {
+    if (!used.has(port)) {
+      return port;
+    }
+  }
+  throw new Error(`注册表端口池（${PORT_POOL_START}-${PORT_POOL_START + PORT_POOL_SIZE - 1}）已耗尽，请用 -p 显式指定端口`);
 }
