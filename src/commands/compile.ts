@@ -13,6 +13,7 @@ import {
 } from '../utils/verify.js';
 import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
 import { readCompileConfig, filterExcludePath, filterIncludePath, validatePaths, type CompileConfig } from '../utils/compile-config.js';
+import { ensureRootTsconfig } from '../utils/tsconfig.js';
 import { buildRuntimeGlobalsDeclaration } from '../utils/runtime-globals.js';
 
 // compile 命令：调 cocos-mcp run_script_diagnostics 做编译检查，生成 log
@@ -95,16 +96,22 @@ export async function compile(projectDir?: string): Promise<void> {
   }
   console.log(chalk.gray(`[检查3] CocosMCP HTTP server 可访问（${mcpPort}）`));
 
-  // 检查4：确认工程 tsconfig.json 存在。P1 忠实模式：cocoscli 不再构造残缺的 verify tsconfig，
-  //       让 cocos-mcp findTsConfig 默认优先读工程 tsconfig.json（保留完整类型环境：
-  //       types/include/paths/strict 全部按工程原样，cocoscli 不覆盖）
-  const rootTsconfig = path.join(dir, 'tsconfig.json');
-  if (!fs.existsSync(rootTsconfig)) {
-    console.log(chalk.red(`[检查4] 工程根 tsconfig.json 不存在：${rootTsconfig}`));
-    console.log(chalk.gray('  cocoscli compile 忠实使用工程 tsconfig.json 作为类型环境，请确认工程有该文件（Cocos 工程通常自带）。'));
-    process.exit(1);
+  // 检查4：保障工程根 tsconfig.json 存在（不存在自动生成推荐模板）。P1 忠实模式：
+  //       cocoscli 不构造 verify tsconfig，让 cocos-mcp findTsConfig 默认优先读工程
+  //       tsconfig.json（保留完整类型环境：types/include/paths/strict 全部按工程原样）
+  const tsconfigSetup = ensureRootTsconfig(dir);
+  if (tsconfigSetup.status === 'written') {
+    console.log(chalk.yellow(`[检查4] 工程根 tsconfig.json 不存在，已生成推荐模板：${path.join(dir, 'tsconfig.json')}`));
+    console.log(chalk.gray('  模板：extends ./temp/tsconfig.cocos.json + skipLibCheck:true + lib ES2017/DOM（折叠引擎声明噪音）'));
+    if (!tsconfigSetup.hasBase) {
+      console.log(chalk.yellow('  [提示] temp/tsconfig.cocos.json 尚不存在（工程未在 CocosCreator 打开过），先跑 cocoscli open 再 compile。'));
+    }
+  } else {
+    console.log(chalk.gray('[检查4] 使用工程 tsconfig.json（忠实模式，不构造 verify tsconfig）'));
+    if (tsconfigSetup.missingSkipLibCheck) {
+      console.log(chalk.yellow('  [提示] 工程 tsconfig.json 未设 "skipLibCheck": true，引擎 .d.ts（jsb.d.ts/cc.d.ts）声明噪音可能大量进入结果；可手动补上（cocoscli 不自动改已有配置）。'));
+    }
   }
-  console.log(chalk.gray(`[检查4] 使用工程 tsconfig.json（忠实模式，不构造 verify tsconfig）`));
   const tsconfigArg = undefined; // 不传 → cocos-mcp findTsConfig 默认优先 project/tsconfig.json
 
   // P2/P3: 生成 runtime globals bridge（virtual declaration，不落盘，仅 checker 可见）
