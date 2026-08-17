@@ -5,6 +5,7 @@ import { createSpinner, spinnerSucceed, spinnerFail } from '../utils/spinner.js'
 import { findCocosProcesses, isProjectMatch, killProcess } from '../utils/process.js';
 import { isCocosProject } from '../utils/project.js';
 import { COCOS_MCP_DIR, MCP_SERVER_FILE, TOOL_MANAGER_FILE } from '../utils/git.js';
+import { getRegistryPath, removeProject } from '../utils/registry.js';
 
 // remove 命令：卸载 CocosMCP（init 的逆操作）
 //
@@ -12,16 +13,18 @@ import { COCOS_MCP_DIR, MCP_SERVER_FILE, TOOL_MANAGER_FILE } from '../utils/git.
 //        ├─> 第一步 关闭工程进程（如果在运行）
 //        ├─> 第二步 删除 extensions/CocosMCP
 //        ├─> 第三步 删除 settings/mcp-server.json
-//        └─> 第四步 删除 settings/tool-manager.json
+//        ├─> 第四步 删除 settings/tool-manager.json
+//        └─> 第五步 从全局工程列表移除（~/.cocoscli/projects.json，init 第八步的逆操作）
 
 /**
  * remove 命令：卸载 CocosMCP（init 的逆操作）
  *
- * 四步流程：
+ * 五步流程：
  *   1. 关闭工程对应进程（如果在运行）
  *   2. 删除 extensions/CocosMCP
  *   3. 删除 settings/mcp-server.json
  *   4. 删除 settings/tool-manager.json
+ *   5. 从全局工程列表移除（~/.cocoscli/projects.json）
  *
  * @param projectDir 工程目录，省略时默认当前执行目录
  */
@@ -65,6 +68,17 @@ export function remove(projectDir?: string): void {
   // 第四步：删除 settings/tool-manager.json
   console.log(chalk.blue('\n第四步 删除 settings/tool-manager.json'));
   removeFile(path.join(dir, 'settings', TOOL_MANAGER_FILE), 'settings/tool-manager.json');
+
+  // 第五步：从全局工程列表移除（init 第八步的逆操作）。
+  // 注销失败不 exit（卸载主体已完成），红字提示配置文件路径
+  console.log(chalk.blue('\n第五步 从全局工程列表移除'));
+  try {
+    const removed = removeProject(getRegistryPath(), dir);
+    console.log(chalk.gray(removed ? '  已从全局工程列表移除' : '  全局工程列表无此记录，跳过'));
+  } catch (e) {
+    console.log(chalk.red('  从全局工程列表移除失败'));
+    console.log(chalk.red(`  ${e instanceof Error ? e.message : e}`));
+  }
 
   console.log(chalk.green('\nCocosMCP 卸载完成'));
 }

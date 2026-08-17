@@ -7,9 +7,10 @@
 // index.ts
 //   ├─> 无参数  显示帮助（不默认进 init，避免误触发）
 //   └─> 有参数  commander.parse()
-//         ├─> init   为指定 Cocos 工程安装 CocosMCP 扩展并打开（dir 省略时为当前目录）
+//         ├─> init   为指定 Cocos 工程安装 CocosMCP 扩展并打开（dir 省略时为当前目录，登记全局列表）
 //         ├─> open   用 CocosCreator 打开工程
 //         ├─> close  关闭工程对应的 CocosCreator 进程
+//         ├─> list   列出已注册工程（全局 ~/.cocoscli/projects.json）
 //         └─> ...    build/verify/compile/lint 等检查与工具命令
 
 import { Command } from 'commander';
@@ -18,6 +19,7 @@ import { init } from './commands/init.js';
 import { open } from './commands/open.js';
 import { close } from './commands/close.js';
 import { remove } from './commands/remove.js';
+import { listProjects } from './commands/list.js';
 import { build } from './commands/build.js';
 import { verify } from './commands/verify.js';
 import { compile } from './commands/compile.js';
@@ -58,6 +60,12 @@ program
   .command('remove [dir]')
   .description('卸载 CocosMCP（关闭工程、删除 extensions/CocosMCP 与 settings 配置，init 的逆操作）')
   .action((dir?: string) => remove(dir));
+
+// list：列出所有执行过 cocoscli init 的工程（全局 ~/.cocoscli/projects.json）
+program
+  .command('list')
+  .description('列出所有已执行 cocoscli init 的工程（目录、CocosMCP 版本、MCP 端口）')
+  .action(() => listProjects());
 
 // build：构建工程到指定平台
 program

@@ -8,15 +8,18 @@ import {
   cloneCocosMcp,
   buildCocosMcp,
   checkCocosMcpDeps,
+  readCocosMcpVersion,
   COCOS_MCP_DIR,
   writeDefaultMcpServerConfig,
   writeOpencodePermission,
 } from '../utils/git.js';
+import { readMcpPort } from '../utils/verify.js';
+import { getRegistryPath, upsertProject } from '../utils/registry.js';
 
 /**
  * init 命令：为指定 Cocos 工程安装 CocosMCP 扩展并打开
  *
- * 七步流程：
+ * 八步流程：
  *   1. 定位 CocosCreator（5 级查找，找不到则报错退出）
  *   2. 判定目标目录是否 Cocos 3.x 工程（不是则中止）
  *   3. 安装 CocosMCP 到 extensions/CocosMCP（优先 vendor/deps copy，fallback 远端）
@@ -24,6 +27,7 @@ import {
  *   5. 写入默认 mcp-server.json 到 settings/（已存在则跳过）
  *   6. 写入默认 opencode.json 到工程根（放开 external_directory 权限，供 verify 使用）
  *   7. 打开工程（复用 open 的核心函数）
+ *   8. 登记到全局工程列表（~/.cocoscli/projects.json，cocoscli list 读取）
  *
  * @param projectDir 工程目录，省略时默认当前执行目录
  */
@@ -110,4 +114,26 @@ export function init(projectDir?: string, port = 3001, noLogin = true): void {
   openCocosProject(creatorPath, dir, noLogin);
   console.log(chalk.green(`已用 CocosCreator 打开工程：${dir}${noLogin ? '（免登录）' : ''}`));
   console.log(chalk.gray('提示：extensions/CocosMCP 未纳入父仓库管理，如需忽略请在 .gitignore 添加'));
+
+  // 第八步：登记到全局工程列表（cocoscli list 读取）
+  // 放在最后：所有 exit(1) 失败点都已过去，失败不留半条记录。
+  // 端口用 readMcpPort 读实际生效值（mcp-server.json 已存在时 init 参数不生效）。
+  // 登记失败不 exit（工程已装好，登记是附加动作），红字提示配置文件路径
+  try {
+    const registryPath = getRegistryPath();
+    const result = upsertProject(registryPath, {
+      dir,
+      cocosMcpVersion: readCocosMcpVersion(extDir),
+      port: readMcpPort(dir),
+      initAt: new Date().toISOString(),
+    });
+    console.log(
+      result === 'added'
+        ? chalk.gray('已登记到全局工程列表（cocoscli list 查看）')
+        : chalk.gray('全局工程列表记录已更新（cocoscli list 查看）')
+    );
+  } catch (e) {
+    console.log(chalk.red('登记到全局工程列表失败'));
+    console.log(chalk.red(e instanceof Error ? e.message : String(e)));
+  }
 }

@@ -9,7 +9,8 @@ cocoscli —— 面向 Cocos Creator 3.7.x 的命令行工具。
 | `cocoscli init [dir]` | 装 CocosMCP（普通 clone）+ build + 写 mcp-server.json / opencode.json + 打开（默认免登录），dir 省略时为当前目录 |
 | `cocoscli open [dir]` | 打开工程（默认免登录，已开则跳过） |
 | `cocoscli close [dir]` | 关闭工程对应的 CocosCreator 进程 |
-| `cocoscli remove [dir]` | 卸载 CocosMCP（关闭工程 + 删扩展 + 删配置） |
+| `cocoscli remove [dir]` | 卸载 CocosMCP（关闭工程 + 删扩展 + 删配置 + 从全局列表注销） |
+| `cocoscli list` | 列出已执行 init 的工程（目录、CocosMCP 版本、MCP 端口，全局 ~/.cocoscli/projects.json） |
 | `cocoscli build <platform> [dir] [--fast] [--ignore-category runtime,...]` | 构建打包到指定平台 + 生成 build-log（报错分类 syntax/module/runtime/editor 去重，chunk 哈希归一化；构建不做类型检查，类型错误跑 compile）；`--fast` 只查脚本编译，脚本阶段结束后 kill 进程树提前终止（不产出产物，有报错退出码 1）；`--ignore-category` 显式忽略分类（log 的 errors 数组与退出码均过滤该分类，被过滤行数记入 ignoredErrorCount，原始全文见 build-raw log） |
 | `cocoscli verify <scene> [dir]` | 验证：编译检查 + MCP/preview + opencode 预览场景 |
 | `cocoscli compile [dir]` | 编译检查（cocos-mcp run_script_diagnostics）+ 生成 log |
