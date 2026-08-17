@@ -2,13 +2,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import http from 'http';
+import chalk from 'chalk';
 
 // verify 命令的工具集
 //
-// 三部分：
+// 四部分：
 //   1. tsc 编译检查（runTscCheck + parseTscErrors）
-//   2. MCP / preview HTTP 验证（httpOk + verifyMcpConnection + verifyPreviewUrl）
+//   2. MCP / preview HTTP 验证（httpOk + verifyMcpConnection + verifyPreviewUrl
+//      + detectLoopbackProxy / warnProxyIfLoopbackBlocked 代理旁证提示）
 //   3. opencode run --format json 事件流监控（runOpencodeMonitored + 状态机）
+//   4. 诊断降噪（judgeNoise + classifyDiagnostics）
 //
 // 状态判断的完整说明见 Docs/cocoscli-verify-opencode状态监控.md
 
@@ -114,6 +117,65 @@ export function httpOk(url: string, timeoutMs = 5000): Promise<boolean> {
 /** 验证 CocosMCP 扩展的 health 端点（默认 3001） */
 export function verifyMcpConnection(port = 3001): Promise<boolean> {
   return httpOk(`http://127.0.0.1:${port}/health`);
+}
+
+/** 命中的代理环境变量 */
+export interface ProxyEnvHit {
+  varName: string;  // 如 'http_proxy' / 'HTTP_PROXY'
+  value: string;
+}
+
+/**
+ * 检测代理环境变量是否可能拦截本机回环访问（127.0.0.1/localhost）
+ *
+ * 背景：全局 gitconfig / 环境变量 http_proxy=127.0.0.1:7897 会让外部 curl /
+ * puppeteer / opencode 访问 127.0.0.1:3001 被代理拦截（http_code=000 /
+ * Navigation timeout）。cocoscli 自身用 Node 内置 http 直连，不读代理环境
+ * 变量，CLI 检测不受影响——所以此函数只用于失败分支的旁证提示，不参与成败判定。
+ *
+ * @param env 环境变量表（注入 process.env 便于单测）
+ * @returns 命中返回变量名与值；未设代理、或 no_proxy 已豁免回环（* / 127.0.0.1 / localhost）时返回 null
+ */
+export function detectLoopbackProxy(env: Record<string, string | undefined>): ProxyEnvHit | null {
+  const names = ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY'];
+  const hit = names
+    .map((n) => ({ n, v: env[n] }))
+    .find((x) => x.v !== undefined && x.v.trim() !== '');
+  if (!hit) return null;
+  const noProxy = env.no_proxy ?? env.NO_PROXY ?? '';
+  const entries = noProxy
+    .split(/[,;\s]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const loopbackExempt =
+    entries.includes('*') || entries.includes('127.0.0.1') || entries.includes('localhost');
+  return loopbackExempt ? null : { varName: hit.n, value: (hit.v ?? '').trim() };
+}
+
+/**
+ * MCP 不可达时的代理旁证提示（黄字，不改变退出逻辑）
+ *
+ * 检测到 http_proxy/https_proxy 且 no_proxy 未覆盖 127.0.0.1/localhost 时打印，
+ * 只提示不判定（cocoscli 自身不受影响，受影响的是外部工具的回环验证）。
+ */
+export function warnProxyIfLoopbackBlocked(): void {
+  const hit = detectLoopbackProxy(process.env as Record<string, string | undefined>);
+  if (!hit) return;
+  console.log(
+    chalk.yellow(
+      `[提示] 检测到代理环境变量 ${hit.varName}=${hit.value}，且 no_proxy 未覆盖 127.0.0.1/localhost，外部工具访问本机回环端口可能被代理拦截。`
+    )
+  );
+  console.log(
+    chalk.yellow(
+      '  cocoscli 自身的 HTTP 检查不走代理环境变量，不受影响；受影响的是 curl/puppeteer/opencode 等外部工具。'
+    )
+  );
+  console.log(
+    chalk.yellow(
+      '  建议：设置 no_proxy=127.0.0.1,localhost（PowerShell：$env:NO_PROXY="127.0.0.1,localhost"），或临时清空代理变量后重试。'
+    )
+  );
 }
 
 /** 验证 CocosCreator preview server（默认 7456） */

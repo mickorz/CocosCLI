@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
 import {
   verifyMcpConnection,
+  warnProxyIfLoopbackBlocked,
   fetchPreviewUrl,
   readMcpPort,
   sceneManagementGetList,
@@ -77,6 +78,7 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
   if (!mcpOk) {
     console.log(chalk.red(`[检查2] CocosMCP HTTP server 不可访问（端口 ${mcpPort}）`));
     console.log(chalk.gray('  先跑 cocoscli open。'));
+    warnProxyIfLoopbackBlocked();
     process.exit(1);
   }
   console.log(chalk.gray(`[检查2] CocosMCP HTTP server 可访问（${mcpPort}）`));

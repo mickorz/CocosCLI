@@ -5,6 +5,7 @@ import {
   updateStateFromEvent,
   judgeNoise,
   classifyDiagnostics,
+  detectLoopbackProxy,
   ScriptDiagnostic,
 } from '../../utils/verify.js';
 
@@ -237,5 +238,43 @@ describe('classifyDiagnostics', () => {
     expect(r.noiseSummary.byType[fullType]).toBe(6);
     // 不应出现被截断的 'typeof import(' 作为 key
     expect(r.noiseSummary.byType['typeof import(']).toBeUndefined();
+  });
+});
+
+describe('detectLoopbackProxy', () => {
+  it('未设代理变量时返回 null（含空表 / 空串）', () => {
+    expect(detectLoopbackProxy({})).toBeNull();
+    expect(detectLoopbackProxy({ http_proxy: '' })).toBeNull();
+    expect(detectLoopbackProxy({ http_proxy: '  ' })).toBeNull();
+  });
+
+  it('设 http_proxy 未豁免回环时命中', () => {
+    expect(detectLoopbackProxy({ http_proxy: 'http://127.0.0.1:7897' })).toEqual({
+      varName: 'http_proxy',
+      value: 'http://127.0.0.1:7897',
+    });
+  });
+
+  it('仅大写 HTTPS_PROXY 同样命中（Windows 常见形态）', () => {
+    expect(detectLoopbackProxy({ HTTPS_PROXY: 'http://127.0.0.1:7897' })).toEqual({
+      varName: 'HTTPS_PROXY',
+      value: 'http://127.0.0.1:7897',
+    });
+  });
+
+  it('no_proxy 覆盖回环（127.0.0.1 / localhost / *）时返回 null', () => {
+    const proxy = { http_proxy: 'http://127.0.0.1:7897' };
+    expect(detectLoopbackProxy({ ...proxy, no_proxy: '127.0.0.1' })).toBeNull();
+    expect(detectLoopbackProxy({ ...proxy, no_proxy: 'localhost' })).toBeNull();
+    expect(detectLoopbackProxy({ ...proxy, no_proxy: '*' })).toBeNull();
+    expect(detectLoopbackProxy({ ...proxy, no_proxy: 'company.com,127.0.0.1,localhost' })).toBeNull();
+    // 大写 NO_PROXY 同样生效
+    expect(detectLoopbackProxy({ ...proxy, NO_PROXY: '127.0.0.1,localhost' })).toBeNull();
+  });
+
+  it('no_proxy 只覆盖其他域名时仍命中（回环未被豁免）', () => {
+    expect(
+      detectLoopbackProxy({ http_proxy: 'http://127.0.0.1:7897', no_proxy: 'company.com' })
+    ).toEqual({ varName: 'http_proxy', value: 'http://127.0.0.1:7897' });
   });
 });

@@ -7,6 +7,7 @@ import {
   runScriptDiagnosticsViaMcp,
   readMcpPort,
   verifyMcpConnection,
+  warnProxyIfLoopbackBlocked,
   classifyDiagnostics,
   ScriptDiagnostic,
 } from '../utils/verify.js';
@@ -89,6 +90,7 @@ export async function compile(projectDir?: string): Promise<void> {
   if (!mcpOk) {
     console.log(chalk.red(`[检查3] CocosMCP HTTP server 不可访问（端口 ${mcpPort}）`));
     console.log(chalk.gray('  CocosCreator 可能没开，或 CocosMCP 扩展没加载。先跑 cocoscli open。'));
+    warnProxyIfLoopbackBlocked();
     process.exit(1);
   }
   console.log(chalk.gray(`[检查3] CocosMCP HTTP server 可访问（${mcpPort}）`));

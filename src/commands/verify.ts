@@ -6,6 +6,7 @@ import { getCocosCreatorPath, openCocosProject } from '../utils/cocos.js';
 import {
   runScriptDiagnosticsViaMcp,
   verifyMcpConnection,
+  warnProxyIfLoopbackBlocked,
   httpOk,
   fetchPreviewUrl,
   readMcpPort,
@@ -122,6 +123,7 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
         console.log(chalk.yellow(`  在 ${extDir} 跑 npm install，或重跑 cocoscli init。`));
       }
     }
+    warnProxyIfLoopbackBlocked();
   }
 
   // 第2步：编译检查 + 自动修复循环（调 cocos-mcp run_script_diagnostics，用编辑器内置 tsc）

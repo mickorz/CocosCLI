@@ -4,7 +4,7 @@ import { spawn } from 'child_process';
 import * as os from 'os';
 import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
-import { verifyMcpConnection, fetchPreviewUrl, readMcpPort } from '../utils/verify.js';
+import { verifyMcpConnection, warnProxyIfLoopbackBlocked, fetchPreviewUrl, readMcpPort } from '../utils/verify.js';
 import { writeCompileLog } from '../utils/compile-log.js';
 import { ensureCdpCli } from '../utils/dep-check.js';
 import { runCdpCliSync } from '../utils/cdp-cli.js';
@@ -120,6 +120,7 @@ export async function browserLogs(
   const mcpOk = await verifyMcpConnection(mcpPort);
   if (!mcpOk) {
     console.log(chalk.red(`[检查2] CocosMCP HTTP server 不可访问（端口 ${mcpPort}）`));
+    warnProxyIfLoopbackBlocked();
     process.exit(1);
   }
   console.log(chalk.gray(`[检查2] CocosMCP HTTP server 可访问（${mcpPort}）`));
