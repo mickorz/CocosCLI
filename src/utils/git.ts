@@ -20,6 +20,9 @@ import { fileURLToPath } from 'url';
 //
 // checkCocosMcpDeps(extDir)
 //        └─> 按 package.json dependencies 逐项查 node_modules/<name>（手动复制漏装检出）
+//
+// readCocosMcpVersion(extDir)
+//        └─> 读 package.json version（init 登记到全局工程列表用）
 
 /** CocosMCP 扩展仓库地址（fallback：vendor/deps 都不存在时用，GitHub） */
 export const COCOS_MCP_URL = 'https://github.com/mickorz/CocosMCP.git';
@@ -116,6 +119,23 @@ export function buildCocosMcp(projectPath: string): void {
   }
   execSync('npm install --no-fund --no-audit', { cwd: extDir, stdio: 'inherit' });
   execSync('npm run build', { cwd: extDir, stdio: 'inherit' });
+}
+
+/**
+ * 读 extensions/CocosMCP 的版本号（package.json version）
+ *
+ * init 第八步登记到全局工程列表（~/.cocoscli/projects.json）用。
+ *
+ * @param extDir extensions/CocosMCP 绝对路径
+ * @returns version 字符串；package.json 缺 version 字段时返回 'unknown'（显示用，不炸 JSON）
+ * @throws package.json 不存在/不可读时抛错（错误消息含路径，精准暴露，不吞）
+ */
+export function readCocosMcpVersion(extDir: string): string {
+  const pkgPath = path.join(extDir, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as {
+    version?: unknown;
+  };
+  return typeof pkg.version === 'string' ? pkg.version : 'unknown';
 }
 
 /** CocosMCP 运行时依赖检测结果 */

@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { cloneCocosMcp, writeDefaultMcpServerConfig, checkCocosMcpDeps } from '../../utils/git.js';
+import { cloneCocosMcp, writeDefaultMcpServerConfig, checkCocosMcpDeps, readCocosMcpVersion } from '../../utils/git.js';
 
 describe('cloneCocosMcp', () => {
   let tmp: string;
@@ -97,5 +97,32 @@ describe('checkCocosMcpDeps', () => {
   it('package.json 不存在时抛错（错误消息含路径，精准暴露）', () => {
     fs.rmSync(path.join(extDir, 'package.json'));
     expect(() => checkCocosMcpDeps(extDir)).toThrow(/package\.json/);
+  });
+});
+
+describe('readCocosMcpVersion', () => {
+  let extDir: string;
+
+  beforeEach(() => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cocoscli-ver-'));
+    extDir = path.join(tmp, 'extensions', 'CocosMCP');
+    fs.mkdirSync(extDir, { recursive: true });
+  });
+  afterEach(() => {
+    fs.rmSync(path.dirname(path.dirname(extDir)), { recursive: true, force: true });
+  });
+
+  it('正常返回 package.json 的 version 字段', () => {
+    fs.writeFileSync(path.join(extDir, 'package.json'), JSON.stringify({ version: '0.3.0' }), 'utf-8');
+    expect(readCocosMcpVersion(extDir)).toBe('0.3.0');
+  });
+
+  it('缺 version 字段时返回 unknown（显示用，不炸）', () => {
+    fs.writeFileSync(path.join(extDir, 'package.json'), JSON.stringify({ name: 'CocosMCP' }), 'utf-8');
+    expect(readCocosMcpVersion(extDir)).toBe('unknown');
+  });
+
+  it('package.json 不存在时抛错（精准暴露，不吞）', () => {
+    expect(() => readCocosMcpVersion(extDir)).toThrow(/package\.json/);
   });
 });
