@@ -13,8 +13,32 @@ import {
   writeDefaultMcpServerConfig,
   writeOpencodePermission,
 } from '../utils/git.js';
-import { readMcpPort } from '../utils/verify.js';
-import { getRegistryPath, upsertProject } from '../utils/registry.js';
+import { getRegistryPath, upsertProject, findPortOccupant, findAvailablePort } from '../utils/registry.js';
+
+/**
+ * 读工程已有 settings/mcp-server.json 的端口
+ *
+ * 与 readMcpPort 的区别：这里要区分「文件不存在/没有端口」（返回 null，
+ * 触发端口决策）与「有端口」（以文件为准），readMcpPort 会吞错并 fallback 3001。
+ *
+ * @returns 端口号；文件不存在或没有有效 port 字段返回 null
+ */
+function readExistingMcpPort(dir: string): number | null {
+  const cfgPath = path.join(dir, 'settings', 'mcp-server.json');
+  if (!fs.existsSync(cfgPath)) {
+    return null;
+  }
+  try {
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8')) as { port?: unknown };
+    if (typeof cfg.port === 'number' && cfg.port > 0) {
+      return cfg.port;
+    }
+  } catch {
+    // 坏 JSON 交给 writeDefaultMcpServerConfig 的 exists 分支之外处理不了，
+    // 这里当无端口走决策，写入时 exists 跳过不会碰它（用户手工修复）
+  }
+  return null;
+}
 
 /**
  * init 命令：为指定 Cocos 工程安装 CocosMCP 扩展并打开
@@ -30,8 +54,10 @@ import { getRegistryPath, upsertProject } from '../utils/registry.js';
  *   8. 登记到全局工程列表（~/.cocoscli/projects.json，cocoscli list 读取）
  *
  * @param projectDir 工程目录，省略时默认当前执行目录
+ * @param port CocosMCP 端口；省略时自动错开（读全局注册表挑空闲口，首个工程 3001），
+ *             显式指定时尊重用户选择，但撞已注册工程时黄字警告
  */
-export function init(projectDir?: string, port = 3001, noLogin = true): void {
+export function init(projectDir?: string, port?: number, noLogin = true): void {
   const dir = path.resolve(projectDir ?? process.cwd());
 
   // 第一步：定位 CocosCreator
@@ -89,10 +115,31 @@ export function init(projectDir?: string, port = 3001, noLogin = true): void {
   }
 
   // 第五步：写入默认 mcp-server.json（CocosMCP 服务器配置，已存在则跳过）
+  // 端口优先级：mcp-server.json 已存在 > 显式 -p > 自动错开（全局注册表挑空闲口）
+  //   - 已存在：以文件为准（重复 init 不覆盖，改端口走 cocoscli remove + init）
+  //   - 显式 -p：尊重用户选择，但撞已注册工程时黄字警告（不阻止，用户可能知道自己在干什么）
+  //   - 未传 -p：findAvailablePort 从 3001 起跳过全局注册表已占用端口，避免多工程撞车
+  const registryPath = getRegistryPath();
+  const existingPort = readExistingMcpPort(dir);
+  let portToWrite: number;
+  if (existingPort !== null) {
+    portToWrite = existingPort;
+    console.log(chalk.gray(`mcp-server.json 已有端口配置（${existingPort}），以文件为准`));
+  } else if (port !== undefined) {
+    portToWrite = port;
+    const occupant = findPortOccupant(registryPath, port, dir);
+    if (occupant) {
+      console.log(chalk.yellow(`[警告] 端口 ${port} 已被工程 ${occupant.dir} 注册占用，两工程同时开会冲突`));
+      console.log(chalk.yellow('  如需错开：cocoscli remove 后重跑 init 不带 -p（自动分配），或换 -p 端口'));
+    }
+  } else {
+    portToWrite = findAvailablePort(registryPath, dir);
+    console.log(chalk.gray(`自动分配端口：${portToWrite}（已跳过全局注册表占用口，cocoscli list 查看）`));
+  }
   const configSpinner = createSpinner('配置默认 mcp-server.json...').start();
   try {
-    const cfg = writeDefaultMcpServerConfig(dir, port);
-    spinnerSucceed(configSpinner, cfg === 'exists' ? 'mcp-server.json 已存在，跳过' : '默认 mcp-server.json 已写入 settings/');
+    const cfg = writeDefaultMcpServerConfig(dir, portToWrite);
+    spinnerSucceed(configSpinner, cfg === 'exists' ? 'mcp-server.json 已存在，跳过' : `默认 mcp-server.json 已写入 settings/（端口 ${portToWrite}）`);
   } catch (e) {
     spinnerFail(configSpinner, '写入 mcp-server.json 失败');
     console.log(chalk.red(e instanceof Error ? e.message : String(e)));
@@ -117,14 +164,13 @@ export function init(projectDir?: string, port = 3001, noLogin = true): void {
 
   // 第八步：登记到全局工程列表（cocoscli list 读取）
   // 放在最后：所有 exit(1) 失败点都已过去，失败不留半条记录。
-  // 端口用 readMcpPort 读实际生效值（mcp-server.json 已存在时 init 参数不生效）。
+  // 端口用实际写入/生效值（第五步决策结果），不重新读文件。
   // 登记失败不 exit（工程已装好，登记是附加动作），红字提示配置文件路径
   try {
-    const registryPath = getRegistryPath();
     const result = upsertProject(registryPath, {
       dir,
       cocosMcpVersion: readCocosMcpVersion(extDir),
-      port: readMcpPort(dir),
+      port: portToWrite,
       initAt: new Date().toISOString(),
     });
     console.log(

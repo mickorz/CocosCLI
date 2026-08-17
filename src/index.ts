@@ -37,11 +37,12 @@ program
   .version(VERSION);
 
 // init：为指定 Cocos 工程安装 CocosMCP 扩展并打开，dir 省略时为当前目录
+// -p 不给默认值：区分「用户显式指定」与「未指定自动错开」（读全局注册表挑空闲端口）
 program
   .command('init [dir]')
   .description('为 Cocos 工程安装 CocosMCP 扩展并打开（默认免登录），dir 省略时为当前目录')
-  .option('-p, --port <port>', 'CocosMCP 端口（默认 3001，多工程时错开如 3002）', '3001')
-  .action((dir: string | undefined, options: { port?: string }) => init(dir, parseInt(options.port ?? '3001', 10)));
+  .option('-p, --port <port>', 'CocosMCP 端口（省略时按全局注册表自动错开，首个工程 3001）')
+  .action((dir: string | undefined, options: { port?: string }) => init(dir, options.port ? parseInt(options.port, 10) : undefined));
 
 // open：用 CocosCreator 打开工程，dir 省略时为当前目录
 program
