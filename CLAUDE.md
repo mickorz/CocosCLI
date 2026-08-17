@@ -10,7 +10,7 @@ cocoscli —— 面向 Cocos Creator 3.7.x 的命令行工具。
 | `cocoscli open [dir]` | 打开工程（默认免登录，已开则跳过） |
 | `cocoscli close [dir]` | 关闭工程对应的 CocosCreator 进程 |
 | `cocoscli remove [dir]` | 卸载 CocosMCP（关闭工程 + 删扩展 + 删配置） |
-| `cocoscli build <platform> [dir]` | 构建打包到指定平台（web-desktop / wechat / douyin 等）+ 生成 build-log（报错分类去重；注意构建不做类型检查，类型错误跑 compile） |
+| `cocoscli build <platform> [dir] [--fast] [--ignore-category runtime,...]` | 构建打包到指定平台 + 生成 build-log（报错分类 syntax/module/runtime/editor 去重，chunk 哈希归一化；构建不做类型检查，类型错误跑 compile）；`--fast` 只查脚本编译，脚本阶段结束后 kill 进程树提前终止（不产出产物，有报错退出码 1）；`--ignore-category` 显式忽略分类（log 的 errors 数组与退出码均过滤该分类，被过滤行数记入 ignoredErrorCount，原始全文见 build-raw log） |
 | `cocoscli verify <scene> [dir]` | 验证：编译检查 + MCP/preview + opencode 预览场景 |
 | `cocoscli compile [dir]` | 编译检查（cocos-mcp run_script_diagnostics）+ 生成 log |
 | `cocoscli lint [dir]` | ESLint 代码规范检查（忠实工程 .eslintrc.json + tsconfig.eslint.json + 工程本地 ESLint）+ 生成 eslint-log |

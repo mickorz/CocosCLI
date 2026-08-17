@@ -63,7 +63,10 @@ program
 program
   .command('build <platform> [dir]')
   .description('构建工程到指定平台（web/web-desktop、web-mobile、wechat、douyin 等），生成 build-log，dir 省略时为当前目录')
-  .action((platform: string, dir?: string) => build(dir, platform));
+  .option('--fast', '快速模式：只检查脚本编译，脚本阶段结束后提前终止（不产出构建产物，发现报错退出码非 0）')
+  .option('--ignore-category <cats>', '忽略指定报错分类（逗号分隔：syntax,module,runtime,editor）：log 的 errors 数组与退出码均过滤掉该分类（被过滤行数记入 ignoredErrorCount，原始全文见 build-raw log）')
+  .action((platform: string, dir?: string, opts?: { fast?: boolean; ignoreCategory?: string }) =>
+    build(dir, platform, opts?.fast === true, opts?.ignoreCategory));
 
 // verify：验证工程（编译检查 + MCP/preview 验证 + opencode 预览场景）
 program
