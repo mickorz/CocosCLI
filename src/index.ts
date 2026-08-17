@@ -7,7 +7,7 @@
 // index.ts
 //   ├─> 无参数  显示帮助（不默认进 init，避免误触发）
 //   └─> 有参数  commander.parse()
-//         ├─> init   为当前 Cocos 工程安装 CocosMCP 扩展并打开
+//         ├─> init   为指定 Cocos 工程安装 CocosMCP 扩展并打开（dir 省略时为当前目录）
 //         ├─> open   用 CocosCreator 打开工程
 //         ├─> close  关闭工程对应的 CocosCreator 进程
 //         └─> ...    build/verify/compile/lint 等检查与工具命令
@@ -34,12 +34,12 @@ program
   .description('Cocos Creator 3.7.x 项目命令行工具')
   .version(VERSION);
 
-// init：为当前 Cocos 工程安装 CocosMCP 扩展并打开
+// init：为指定 Cocos 工程安装 CocosMCP 扩展并打开，dir 省略时为当前目录
 program
-  .command('init')
-  .description('为当前 Cocos 工程安装 CocosMCP 扩展并打开（默认免登录）')
+  .command('init [dir]')
+  .description('为 Cocos 工程安装 CocosMCP 扩展并打开（默认免登录），dir 省略时为当前目录')
   .option('-p, --port <port>', 'CocosMCP 端口（默认 3001，多工程时错开如 3002）', '3001')
-  .action((options) => init(parseInt(options.port, 10)));
+  .action((dir: string | undefined, options: { port?: string }) => init(dir, parseInt(options.port ?? '3001', 10)));
 
 // open：用 CocosCreator 打开工程，dir 省略时为当前目录
 program

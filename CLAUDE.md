@@ -6,7 +6,7 @@ cocoscli —— 面向 Cocos Creator 3.7.x 的命令行工具。
 
 | 命令 | 说明 |
 |---|---|
-| `cocoscli init` | 装 CocosMCP（普通 clone）+ build + 写 mcp-server.json / opencode.json + 打开（默认免登录） |
+| `cocoscli init [dir]` | 装 CocosMCP（普通 clone）+ build + 写 mcp-server.json / opencode.json + 打开（默认免登录），dir 省略时为当前目录 |
 | `cocoscli open [dir]` | 打开工程（默认免登录，已开则跳过） |
 | `cocoscli close [dir]` | 关闭工程对应的 CocosCreator 进程 |
 | `cocoscli remove [dir]` | 卸载 CocosMCP（关闭工程 + 删扩展 + 删配置） |
