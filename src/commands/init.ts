@@ -55,7 +55,7 @@ function readExistingMcpPort(dir: string): number | null {
  *
  * @param projectDir 工程目录，省略时默认当前执行目录
  * @param port CocosMCP 端口；省略时自动错开（读全局注册表挑空闲口，首个工程 3001），
- *             显式指定时尊重用户选择，但撞已注册工程时黄字警告
+ *             显式指定撞已注册工程时直接中断并推荐空闲端口
  */
 export function init(projectDir?: string, port?: number, noLogin = true): void {
   const dir = path.resolve(projectDir ?? process.cwd());
@@ -117,7 +117,7 @@ export function init(projectDir?: string, port?: number, noLogin = true): void {
   // 第五步：写入默认 mcp-server.json（CocosMCP 服务器配置，已存在则跳过）
   // 端口优先级：mcp-server.json 已存在 > 显式 -p > 自动错开（全局注册表挑空闲口）
   //   - 已存在：以文件为准（重复 init 不覆盖，改端口走 cocoscli remove + init）
-  //   - 显式 -p：尊重用户选择，但撞已注册工程时黄字警告（不阻止，用户可能知道自己在干什么）
+  //   - 显式 -p：撞已注册工程时直接中断（红字报端口冲突 + 推荐空闲端口）
   //   - 未传 -p：findAvailablePort 从 3001 起跳过全局注册表已占用端口，避免多工程撞车
   const registryPath = getRegistryPath();
   const existingPort = readExistingMcpPort(dir);
@@ -126,12 +126,16 @@ export function init(projectDir?: string, port?: number, noLogin = true): void {
     portToWrite = existingPort;
     console.log(chalk.gray(`mcp-server.json 已有端口配置（${existingPort}），以文件为准`));
   } else if (port !== undefined) {
-    portToWrite = port;
     const occupant = findPortOccupant(registryPath, port, dir);
     if (occupant) {
-      console.log(chalk.yellow(`[警告] 端口 ${port} 已被工程 ${occupant.dir} 注册占用，两工程同时开会冲突`));
-      console.log(chalk.yellow('  如需错开：cocoscli remove 后重跑 init 不带 -p（自动分配），或换 -p 端口'));
+      const suggest = findAvailablePort(registryPath, dir);
+      console.log(chalk.red(`端口冲突：${port} 已被工程 ${occupant.dir} 注册占用（cocoscli list 查看）`));
+      console.log(chalk.gray('  两工程同开时后启动的 CocosMCP 会起不来，已中断 init。'));
+      console.log(chalk.gray(`  推荐端口：${suggest}，重跑：cocoscli init ${dir} -p ${suggest}`));
+      console.log(chalk.gray('  或不带 -p 重跑（自动分配空闲端口）'));
+      process.exit(1);
     }
+    portToWrite = port;
   } else {
     portToWrite = findAvailablePort(registryPath, dir);
     console.log(chalk.gray(`自动分配端口：${portToWrite}（已跳过全局注册表占用口，cocoscli list 查看）`));
