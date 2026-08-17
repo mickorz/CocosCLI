@@ -724,17 +724,22 @@ export type SceneOpenResult = 'success' | 'timeout' | 'failed';
  * 注：httpPostJson 超时 / 网络异常 / JSON 解析失败都返回 null；前置 verifyMcpConnection
  * 已确认 HTTP 可达，切场景期间 null 基本即「编辑器无响应」，统一归为超时。
  *
+ * discardUnsaved（默认 true）：切换前不保存直接丢弃当前场景的未保存改动——
+ * 未保存的匿名场景 save 会弹「另存为」原生框阻塞 scene 通道（CLI 每次切场景弹窗的来源）；
+ * 3.7.3 实测 dirty 场景直接 open-scene 不弹框。需要保留改动传 false（走 save 后切）。
+ *
  * @returns 'success' 切换成功 / 'timeout' 超时或无响应 / 'failed' 编辑器明确返回失败
  */
 export async function sceneManagementOpen(
   mcpPort: number,
   scenePath: string,
-  timeoutMs = 10000
+  timeoutMs = 10000,
+  discardUnsaved = true
 ): Promise<SceneOpenResult> {
   const resp = await Promise.race([
     httpPostJson(
       `http://127.0.0.1:${mcpPort}/api/scene/scene_management`,
-      { action: 'open', scenePath },
+      { action: 'open', scenePath, discardUnsaved },
       timeoutMs
     ),
     // 超时兜底：到点强制返回 null（httpPostJson 内部 req.timeout 也会触发，此处双保险）

@@ -33,10 +33,15 @@ function sleep(ms: number): Promise<void> {
 /**
  * previewscene 命令：切换场景 + CDP Chrome 打开预览 + 验证引擎
  *
+ * 切换模式（默认丢弃）：不保存当前场景直接切，未保存改动被丢弃，不触发任何原生弹窗
+ * （未保存的匿名场景 save 会弹「另存为」框阻塞 scene 通道，这是每次弹窗的来源）。
+ * --save：切换前先保存当前场景（旧行为，保留未保存改动）。
+ *
  * @param scene 场景名（如 loading）
  * @param projectDir 工程目录，省略时默认当前执行目录
+ * @param save 切换前保存当前场景（默认 false 丢弃切换）
  */
-export async function previewScene(scene: string, projectDir?: string): Promise<void> {
+export async function previewScene(scene: string, projectDir?: string, save = false): Promise<void> {
   const dir = path.resolve(projectDir ?? process.cwd());
 
   if (!scene) {
@@ -53,7 +58,8 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
   console.log(chalk.cyan(`预览场景`));
   console.log(chalk.gray(`工程：${dir}`));
   console.log(chalk.gray(`场景：${scene}`));
-  console.log(chalk.gray(`MCP 端口：${mcpPort}\n`));
+  console.log(chalk.gray(`MCP 端口：${mcpPort}`));
+  console.log(chalk.gray(`切换模式：${save ? '保存后切换（--save）' : '丢弃未保存改动直接切换（默认；--save 保留改动）'}\n`));
 
   // ===== 前置检查 =====
 
@@ -160,8 +166,9 @@ export async function previewScene(scene: string, projectDir?: string): Promise<
   console.log(chalk.gray(`找到场景：${target.name}（${target.path}）`));
 
   // 2. open 切场景（30 秒超时兜底，防编辑器切大场景卡死）
+  //    默认 discardUnsaved=true 丢弃切换：跳过 save，避免匿名场景弹「另存为」框
   console.log(chalk.gray(`切换场景：${target.path}（超时 30 秒）...`));
-  const openResult = await sceneManagementOpen(mcpPort, target.path);
+  const openResult = await sceneManagementOpen(mcpPort, target.path, 10000, !save);
   if (openResult === 'timeout') {
     console.log(chalk.red(`场景切换超时（30 秒未响应）：${target.path}`));
     console.log(chalk.gray('  可能场景过大或编辑器卡顿；可重试，或检查 CocosCreator 是否正常响应。'));

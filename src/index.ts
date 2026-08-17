@@ -97,10 +97,12 @@ program
   .action(async (dir?: string) => lint(dir));
 
 // previewscene：切换场景并获取预览地址（CocosMCP scene_management + server_information）
+// 默认丢弃未保存改动直接切换（不弹保存框）；--save 切换前保存当前场景
 program
   .command('previewscene <scene> [dir]')
-  .description('切换场景并获取预览地址（CocosMCP），在浏览器打开预览')
-  .action(async (scene: string, dir?: string) => previewScene(scene, dir));
+  .description('切换场景并获取预览地址（CocosMCP），在浏览器打开预览；默认丢弃未保存改动直接切换（不弹窗），--save 保留改动')
+  .option('--save', '切换前保存当前场景（默认丢弃未保存改动直接切）')
+  .action(async (scene: string, dir?: string, options?: { save?: boolean }) => previewScene(scene, dir, options?.save === true));
 
 // eval：在编辑器内执行任意 JS（CocosMCP execute_script，scene/editor 双上下文）
 // PowerShell 引号提示：外层用单引号（双引号会吃 JS 模板串 ${} 插值），JS 内部字符串用双引号；
