@@ -318,8 +318,11 @@ export async function buildProject(
   const durationMs = Date.now() - startMs;
 
   // 落盘原始全文 log（先写 raw，再写 JSON，JSON 里引用 raw 路径）
+  // raw 与 build-log JSON 同归 .cocoscli/logs/build/ 子目录，同名时间戳配对
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const rawLogPath = path.join(configDir, `build-raw-${ts}.log`);
+  const buildLogDir = path.join(configDir, 'logs', 'build');
+  fs.mkdirSync(buildLogDir, { recursive: true });
+  const rawLogPath = path.join(buildLogDir, `build-raw-${ts}.log`);
   fs.writeFileSync(rawLogPath, Buffer.concat(chunks).toString('utf-8'), 'utf-8');
 
   // 提取报错（分类去重）+ 按忽略分类过滤：
@@ -392,7 +395,7 @@ export async function buildProject(
     errorLineCount,
     errors,
     rawLog: path.relative(projectPath, rawLogPath).split(path.sep).join('/'),
-  }, ts);
+  }, 'build', ts);
 
   return result;
 }

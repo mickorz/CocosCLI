@@ -100,7 +100,7 @@ export async function lint(projectDir?: string): Promise<void> {
   if (preflightErrors.length > 0) {
     result.environmentErrors.push(...preflightErrors);
     result.ok = false;
-    const logPath = writeCompileLog(dir, 'eslint-log-', result);
+    const logPath = writeCompileLog(dir, 'eslint-log-', result, 'lint');
     printEnvironmentErrors(result.environmentErrors);
     console.log(chalk.gray('  请补齐环境后重跑（.eslintrc.json / tsconfig.eslint.json / 工程本地 npm install eslint）'));
     console.log(chalk.green(`\nLint 报告已写入：${logPath}`));
@@ -116,7 +116,7 @@ export async function lint(projectDir?: string): Promise<void> {
   spinnerSucceed(spinner, `lint 完成（检查 ${linted.fileCount} 个文件）`);
 
   // ===== 落日志 + 终端摘要 =====
-  const logPath = writeCompileLog(dir, 'eslint-log-', linted);
+  const logPath = writeCompileLog(dir, 'eslint-log-', linted, 'lint');
   if (linted.parserProject) {
     console.log(chalk.gray(`ESLint TypeScript Project（parserOptions.project）：${linted.parserProject}`));
   }

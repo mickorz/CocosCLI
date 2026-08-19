@@ -77,6 +77,7 @@
 - `compile` 移除 `--strict` 参数，改用 `.cocoscli/compile.config.json` 配置驱动。
 - `compile` 从自拼 verify tsconfig 改为忠实使用工程 `tsconfig.json`。
 - `lint` 的 `process.chdir` 包进 try/finally（`withProjectCwd`），避免工作目录泄漏。
+- 各命令日志按命令分类归档到 `.cocoscli/logs/<命令>/` 子目录（compile / eval / lint / build / verify / browserlogs），`compile.config.json` 与 `buildConfig-<platform>.json` 等配置保留在 `.cocoscli/` 根目录；`writeCompileLog` 新增 `category` 参数支持，`build-raw-*.log` 与 `verify-report.md` 同步归入对应子目录。
 
 ### 移除
 

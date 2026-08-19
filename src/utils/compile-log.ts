@@ -21,9 +21,11 @@ export function readSnippet(filePath: string, line: number, contextLines = 1): s
 
 /**
  * 写编译 log（JSON 格式 + 文件名带时间戳，方便 jq 筛选）
- * @param dir 工程根目录（写到 .cocoscli/）
+ * @param dir 工程根目录
  * @param prefix 文件名前缀（如 compile-log- / eslint-log- / build-log-）
  * @param data log 内容（JSON 序列化，任意对象）
+ * @param category 可选：分类子目录名（如 compile / eval / lint / build / verify / browserlogs）
+ *                 传则写到 .cocoscli/logs/<category>/，不传则写到 .cocoscli/ 根目录（向后兼容）
  * @param timestamp 可选：外部时间戳（build 用它让 build-log JSON 与 build-raw log 同名配对）
  * @returns log 文件完整路径
  */
@@ -31,9 +33,13 @@ export function writeCompileLog(
   dir: string,
   prefix: string,
   data: unknown,
+  category?: string,
   timestamp?: string
 ): string {
-  const logDir = path.join(dir, '.cocoscli');
+  // 有 category：按命令分类归档到 .cocoscli/logs/<category>/；无 category：留 .cocoscli/ 根目录
+  const logDir = category
+    ? path.join(dir, '.cocoscli', 'logs', category)
+    : path.join(dir, '.cocoscli');
   fs.mkdirSync(logDir, { recursive: true });
   const ts = timestamp ?? new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const logPath = path.join(logDir, `${prefix}${ts}.json`);

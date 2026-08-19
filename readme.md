@@ -79,7 +79,7 @@ cocoscli build web-desktop --ignore-category runtime  # 忽略 runtime 分类报
 
 build 内置打包逻辑：定位 CocosCreator → 生成通用 buildConfig（`.cocoscli/buildConfig-<platform>.json`）→ 调 `CocosCreator --project <工程> --build configPath=...`，产物在 `build/<platform>/`。支持的平台简称：`web`/`web-desktop`、`web-mobile`、`wechat`/`wechatgame`、`douyin`/`bytedance`/`bytedancegame`，其它名字原样传给 CocosCreator。
 
-构建结束生成 build-log（报错分类 syntax/module/runtime/editor 去重，chunk 哈希归一化）。`--fast` 只查脚本编译，脚本阶段结束后 kill 进程树提前终止（不产出产物，有报错退出码 1）。`--ignore-category` 显式忽略分类（log 的 errors 数组与退出码均过滤该分类，被过滤行数记入 `ignoredErrorCount`，原始全文见 build-raw log）。构建不做类型检查，类型错误请跑 `compile`。
+构建结束生成 build-log（报错分类 syntax/module/runtime/editor 去重，chunk 哈希归一化）。`--fast` 只查脚本编译，脚本阶段结束后 kill 进程树提前终止（不产出产物，有报错退出码 1）。`--ignore-category` 显式忽略分类（log 的 errors 数组与退出码均过滤该分类，被过滤行数记入 `ignoredErrorCount`，原始全文见 `.cocoscli/logs/build/build-raw-*.log`）。构建不做类型检查，类型错误请跑 `compile`。
 
 ### 验证与检查
 
@@ -92,11 +92,11 @@ cocoscli lint                        # ESLint 检查当前工程
 cocoscli lint D:\MyGame              # ESLint 检查指定工程
 ```
 
-`verify` 会：启动 CocosCreator → `tsc --noEmit` 编译检查 → 验证 MCP 与 preview 连通 → 调 opencode（非交互，`run --format json`）预览场景并事件流监控，最后输出 `.cocoscli/verify-report.md`。
+`verify` 会：启动 CocosCreator → `tsc --noEmit` 编译检查 → 验证 MCP 与 preview 连通 → 调 opencode（非交互，`run --format json`）预览场景并事件流监控，最后输出 `.cocoscli/logs/verify/verify-report.md`。
 
-`compile` 调用 CocosMCP 的 `run_script_diagnostics` 做编译检查，忠实使用工程 `tsconfig.json`，支持 `compile.config.json` 配置 includePath/excludePath 白名单，生成 `.cocoscli/compile-log-*.json`（JSON 格式 + 时间戳文件名 + snippet 代码上下文）。工程根 `tsconfig.json` 缺失时自动生成推荐模板。
+`compile` 调用 CocosMCP 的 `run_script_diagnostics` 做编译检查，忠实使用工程 `tsconfig.json`，支持 `compile.config.json` 配置 includePath/excludePath 白名单，生成 `.cocoscli/logs/compile/compile-log-*.json`（JSON 格式 + 时间戳文件名 + snippet 代码上下文）。工程根 `tsconfig.json` 缺失时自动生成推荐模板。
 
-`lint` 忠实使用工程的 `.eslintrc.json` + `tsconfig.eslint.json` + 工程本地 ESLint，生成 `.cocoscli/eslint-log-*.json`。
+`lint` 忠实使用工程的 `.eslintrc.json` + `tsconfig.eslint.json` + 工程本地 ESLint，生成 `.cocoscli/logs/lint/eslint-log-*.json`。
 
 ### 编辑器交互
 
@@ -114,7 +114,7 @@ cocoscli eval -f script.js D:\MyGame       # 从文件读代码执行（长脚�
 
 `previewscene` 切换场景并获取预览地址（CocosMCP），在浏览器打开预览。默认丢弃未保存改动直接切换（不弹保存框），`--save` 切换前保存当前场景。预览打开后自动最大化浏览器窗口并激活置前（CDP setWindowBounds + activateTarget，CDP 失败时 OS 层兜底）。
 
-`eval` 在编辑器内执行任意 JS（CocosMCP execute_script）。scene 上下文注入 `require/cc/Editor/scene/director/args`，操作活场景树；editor 上下文注入 `require/Editor/args/fs/path/os`，用 Editor API 与文件操作。三种代码出口：直接 `return` / `run(env)` / `module.exports`。结果 JSON 打印 + 写 `.cocoscli/eval-log-*.json`。长脚本推荐 `-f` 文件入口（PowerShell 外层单引号防 `${}` 插值被吃）。
+`eval` 在编辑器内执行任意 JS（CocosMCP execute_script）。scene 上下文注入 `require/cc/Editor/scene/director/args`，操作活场景树；editor 上下文注入 `require/Editor/args/fs/path/os`，用 Editor API 与文件操作。三种代码出口：直接 `return` / `run(env)` / `module.exports`。结果 JSON 打印 + 写 `.cocoscli/logs/eval/eval-log-*.json`。长脚本推荐 `-f` 文件入口（PowerShell 外层单引号防 `${}` 插值被吃）。
 
 `browserlogs` 通过 cdp-cli 读取 CDP Chrome 中预览页的控制台日志，支持级别/条数/关键词过滤。找不到预览页时会提示先跑 `previewscene`。
 
@@ -128,17 +128,18 @@ cocoscli doctor                          # 依赖体检
 
 ## .cocoscli 目录
 
-各命令生成的报告与日志统一存放在工程根目录的 `.cocoscli/` 下：
+各命令生成的报告与日志按命令分类存放在工程根目录的 `.cocoscli/logs/<命令>/` 下（`compile.config.json` 编译配置、`buildConfig-<platform>.json` 构建配置留在 `.cocoscli/` 根目录）：
 
 | 文件 | 来源命令 | 说明 |
 |---|---|---|
-| `buildConfig-<platform>.json` | build | 通用构建配置 |
-| `build-log-*.json` / `build-raw-log-*.txt` | build | 报错分类去重日志 / 原始全文 |
-| `compile-log-*.json` | compile | 编译诊断（JSON + 时间戳 + snippet） |
-| `compile.config.json` | compile | 编译检查配置（includePath/excludePath 白名单） |
-| `eslint-log-*.json` | lint | ESLint 结构化结果 |
-| `verify-report.md` | verify | 验证综合报告 |
-| `eval-log-*.json` | eval | 脚本执行结果 |
+| `buildConfig-<platform>.json` | build | 通用构建配置（根目录） |
+| `logs/build/build-log-*.json` `logs/build/build-raw-*.log` | build | 报错分类去重日志 / 原始全文 |
+| `logs/compile/compile-log-*.json` | compile | 编译诊断（JSON + 时间戳 + snippet） |
+| `compile.config.json` | compile | 编译检查配置（includePath/excludePath 白名单，根目录） |
+| `logs/lint/eslint-log-*.json` | lint | ESLint 结构化结果 |
+| `logs/verify/verify-report.md` `logs/verify/verify-compile-*.json` | verify | 验证综合报告 / 各轮编译日志 |
+| `logs/eval/eval-log-*.json` | eval | 脚本执行结果 |
+| `logs/browserlogs/browserlogs-*.json` | browserlogs | 浏览器控制台日志 |
 
 ## 全局工程注册表
 

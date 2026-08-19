@@ -279,6 +279,6 @@ export async function browserLogs(
     }),
   };
 
-  const logPath = writeCompileLog(dir, 'browserlogs-', logData);
+  const logPath = writeCompileLog(dir, 'browserlogs-', logData, 'browserlogs');
   console.log(chalk.gray(`日志已写入：${logPath}`));
 }

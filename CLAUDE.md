@@ -15,7 +15,7 @@ cocoscli —— 面向 Cocos Creator 3.7.x 的命令行工具。
 | `cocoscli verify <scene> [dir]` | 验证：编译检查 + MCP/preview + opencode 预览场景 |
 | `cocoscli compile [dir]` | 编译检查（cocos-mcp run_script_diagnostics）+ 生成 log |
 | `cocoscli lint [dir]` | ESLint 代码规范检查（忠实工程 .eslintrc.json + tsconfig.eslint.json + 工程本地 ESLint）+ 生成 eslint-log |
-| `cocoscli eval [code] [dir] [--context scene\|editor] [--args json] [-f file] [--timeout ms]` | 在编辑器内执行任意 JS（CocosMCP execute_script 工具）：scene 上下文注入 require/cc/Editor/scene/director/args 操作活场景树，editor 上下文注入 require/Editor/args/fs/path/os 用 Editor API 与文件操作；三出口直接 return / run(env) / module.exports；结果 JSON 打印 + 写 .cocoscli/eval-log-*.json；长脚本推荐 -f 文件入口（PowerShell 外层单引号防 `${}` 插值被吃） |
+| `cocoscli eval [code] [dir] [--context scene\|editor] [--args json] [-f file] [--timeout ms]` | 在编辑器内执行任意 JS（CocosMCP execute_script 工具）：scene 上下文注入 require/cc/Editor/scene/director/args 操作活场景树，editor 上下文注入 require/Editor/args/fs/path/os 用 Editor API 与文件操作；三出口直接 return / run(env) / module.exports；结果 JSON 打印 + 写 .cocoscli/logs/eval/eval-log-*.json；长脚本推荐 -f 文件入口（PowerShell 外层单引号防 `${}` 插值被吃） |
 | `cocoscli previewscene <scene> [dir] [--save]` | 切换场景并获取预览地址（CocosMCP），在浏览器打开预览；默认丢弃未保存改动直接切换（不弹保存框），`--save` 切换前保存当前场景 |
 
 ## 架构

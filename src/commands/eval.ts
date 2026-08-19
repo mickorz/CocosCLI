@@ -205,7 +205,7 @@ function writeEvalLog(
     error: detail.error,
   };
   try {
-    const logPath = writeCompileLog(dir, 'eval-log-', logData);
+    const logPath = writeCompileLog(dir, 'eval-log-', logData, 'eval');
     console.log(chalk.gray(`\neval-log 已写入：${logPath}`));
   } catch (e) {
     // log 落盘失败不吞：红字暴露路径与原因，但不影响已打印的执行结果

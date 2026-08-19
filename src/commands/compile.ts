@@ -217,6 +217,6 @@ export async function compile(projectDir?: string): Promise<void> {
     noiseSummary: classified.noiseSummary,
     noise: classified.noise.map(withSnippet),
   };
-  const logPath = writeCompileLog(dir, 'compile-log-', logData);
+  const logPath = writeCompileLog(dir, 'compile-log-', logData, 'compile');
   console.log(chalk.green(`\n编译报告已写入：${logPath}`));
 }

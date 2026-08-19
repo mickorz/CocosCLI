@@ -86,13 +86,13 @@ program
 // compile：编译检查（cocos-mcp run_script_diagnostics），生成编译报告 log
 program
   .command('compile [dir]')
-  .description('编译检查（cocos-mcp run_script_diagnostics），生成编译报告到 .cocoscli/compile-log.txt。配置见 .cocoscli/compile.config.json')
+  .description('编译检查（cocos-mcp run_script_diagnostics），生成编译报告到 .cocoscli/logs/compile/compile-log-*.json。配置见 .cocoscli/compile.config.json')
   .action(async (dir?: string) => compile(dir));
 
 // lint：ESLint 代码规范检查（忠实使用工程 .eslintrc.json + tsconfig.eslint.json + 工程本地 ESLint）
 program
   .command('lint [dir]')
-  .description('ESLint 代码规范检查（忠实使用工程 .eslintrc.json + tsconfig.eslint.json + 工程本地 ESLint），生成 .cocoscli/eslint-log-*.json')
+  .description('ESLint 代码规范检查（忠实使用工程 .eslintrc.json + tsconfig.eslint.json + 工程本地 ESLint），生成 .cocoscli/logs/lint/eslint-log-*.json')
   .action(async (dir?: string) => lint(dir));
 
 // previewscene：切换场景并获取预览地址（CocosMCP scene_management + server_information）

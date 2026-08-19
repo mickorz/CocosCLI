@@ -171,7 +171,7 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
           .map(([ns, n]) => ({ ns, count: n })),
         errors: c.real.map(withSnippet),
         ...(fullNoise ? { noise: c.noise.map(withSnippet) } : {}),
-      });
+      }, 'verify');
     };
     // 循环条件基于 real.length（否则 2 万 noise 永远进循环）
     while (classified.real.length > 0 && round < maxRounds) {
@@ -294,8 +294,8 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
     ''
   );
 
-  // 写报告
-  const reportDir = path.join(dir, '.cocoscli');
+  // 写报告（归 .cocoscli/logs/verify/ 子目录，与 verify 各轮 log 同目录）
+  const reportDir = path.join(dir, '.cocoscli', 'logs', 'verify');
   fs.mkdirSync(reportDir, { recursive: true });
   const reportPath = path.join(reportDir, 'verify-report.md');
   fs.writeFileSync(reportPath, report.filter(Boolean).join('\n') + '\n', 'utf-8');
