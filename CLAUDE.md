@@ -98,3 +98,4 @@ npm link            # 全局链接 cocoscli（同时得到 cocoscli 与 cdp-cli 
 - 中文注释 / Log
 - UTF-8 编码
 - Conventional Commits（feat: / fix: / docs: / chore:）
+- 每次提交后，根据最新提交信息同步更新 readme.md 与 CHANGELOG.md：README 对应命令表 / 参数 / 使用示例，CHANGELOG 按 Keep a Changelog 分类（新增 / 变更 / 修复 / 文档）追加条目
