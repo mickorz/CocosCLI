@@ -85,6 +85,10 @@
 
 ### 修复
 
+#### build 链路
+
+- 构建成功但 CocosCreator 退出码非零时（macOS 无头构建已知现象，如退出码 36）加灰字提示，避免只看退出码误判构建失败。
+
 #### verify 链路
 
 - MCP port 读工程 `mcp-server.json`，不写死 3001。

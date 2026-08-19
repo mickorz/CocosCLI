@@ -96,6 +96,12 @@ export async function build(
 
   console.log(chalk.gray(`\n耗时：${sec(result.durationMs)} 秒（CocosCreator 退出码 ${result.exitCode ?? '被提前终止'}）`));
 
+  // macOS 无头构建成功但进程退出码非零（如 36）是 CocosCreator/Electron 已知现象，
+  // 加注说明避免只看退出码的人误判构建失败
+  if (result.success && typeof result.exitCode === 'number' && result.exitCode !== 0) {
+    console.log(chalk.gray(`提示：构建成功但 CocosCreator 退出码非零（${result.exitCode}），macOS 无头构建的已知现象，以产物与日志为准`));
+  }
+
   // result.errors 已在 utils 层按 --ignore-category 过滤（log JSON 的 errors 数组同样过滤），
   // 这里直接展示；被过滤行数单独一行留痕
   if (result.errors.length > 0) {
