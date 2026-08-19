@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { isCocosProject } from '../utils/project.js';
 import { verifyMcpConnection, warnProxyIfLoopbackBlocked, fetchPreviewUrl, readMcpPort } from '../utils/verify.js';
 import { writeCompileLog } from '../utils/compile-log.js';
+import { readNonblockingConfig, filterNonblockingBrowserlogs, type KnownNonblockingConfig } from '../utils/nonblocking.js';
 import { ensureCdpCli } from '../utils/dep-check.js';
 import { runCdpCliSync } from '../utils/cdp-cli.js';
 import { checkCocosMcpDeps } from '../utils/git.js';
@@ -91,6 +92,19 @@ export async function browserLogs(
 
   if (!isCocosProject(dir)) {
     console.log(chalk.red(`目标目录不是 Cocos 3.x 工程：${dir}`));
+    process.exit(1);
+  }
+
+  // 读已知非阻断配置（.cocoscli/known_nonblocking_errors.json，不存在自动生成默认模板）
+  let nbConfig: KnownNonblockingConfig | null = null;
+  try {
+    const nb = readNonblockingConfig(dir);
+    nbConfig = nb.config;
+    if (nb.created) {
+      console.log(chalk.yellow(`[提示] 已生成默认 .cocoscli/known_nonblocking_errors.json（已知非阻断错误清单），可按需编辑`));
+    }
+  } catch (e) {
+    console.log(chalk.red(`.cocoscli/known_nonblocking_errors.json 解析失败：${e instanceof Error ? e.message : e}`));
     process.exit(1);
   }
 
@@ -232,32 +246,42 @@ export async function browserLogs(
     }
   }
 
+  // 解析 NDJSON 成对象数组（非 JSON 行包成 { text }）
+  type ConsoleLog = { text?: string; message?: string; type?: string; [key: string]: unknown };
+  const parsedLogs: ConsoleLog[] = filteredLines.map((l) => {
+    try {
+      return JSON.parse(l) as ConsoleLog;
+    } catch {
+      return { text: l };
+    }
+  });
+
+  // 已知非阻断过滤（.cocoscli/known_nonblocking_errors.json，命中归优化问题不计入 logs）
+  const { kept: keptLogs } = filterNonblockingBrowserlogs(parsedLogs, nbConfig);
+
   // ===== 输出 =====
 
-  if (filteredLines.length === 0) {
+  if (keptLogs.length === 0) {
     console.log(chalk.gray('无日志（可能页面未加载，或无匹配日志）'));
   } else {
-    filteredLines.forEach((line) => {
-      // 解析 NDJSON，按 type 着色
-      try {
-        const obj = JSON.parse(line);
-        const text = obj.text || obj.message || line;
-        const type = obj.type || 'log';
-        if (type === 'error') {
-          console.log(chalk.red(`[error] ${text}`));
-        } else if (type === 'warning' || type === 'warn') {
-          console.log(chalk.yellow(`[warn] ${text}`));
-        } else {
-          console.log(chalk.gray(`[${type}] ${text}`));
-        }
-      } catch {
-        // 非 JSON 行，原样输出
-        console.log(line);
+    keptLogs.forEach((obj) => {
+      const text = obj.text || obj.message || JSON.stringify(obj);
+      const type = obj.type || 'log';
+      if (type === 'error') {
+        console.log(chalk.red(`[error] ${text}`));
+      } else if (type === 'warning' || type === 'warn') {
+        console.log(chalk.yellow(`[warn] ${text}`));
+      } else {
+        console.log(chalk.gray(`[${type}] ${text}`));
       }
     });
   }
 
-  console.log(chalk.gray(`\n共 ${filteredLines.length} 条日志`));
+  const nbFilteredCount = parsedLogs.length - keptLogs.length;
+  console.log(chalk.gray(`\n共 ${keptLogs.length} 条日志`));
+  if (nbFilteredCount > 0) {
+    console.log(chalk.gray(`[已过滤 ${nbFilteredCount} 条已知非阻断日志（优化问题，不计入 logs，不写入 log）]`));
+  }
 
   // ===== 写 JSON log =====
 
@@ -269,14 +293,8 @@ export async function browserLogs(
     page,
     type: options.type || 'all',
     grep: options.grep || null,
-    count: filteredLines.length,
-    logs: filteredLines.map((l) => {
-      try {
-        return JSON.parse(l);
-      } catch {
-        return { text: l };
-      }
-    }),
+    count: keptLogs.length,
+    logs: keptLogs,
   };
 
   const logPath = writeCompileLog(dir, 'browserlogs-', logData, 'browserlogs');

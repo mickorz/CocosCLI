@@ -12,6 +12,7 @@ import {
   ScriptDiagnostic,
 } from '../utils/verify.js';
 import { readSnippet, writeCompileLog } from '../utils/compile-log.js';
+import { readNonblockingConfig, filterNonblockingCompile, type KnownNonblockingConfig } from '../utils/nonblocking.js';
 import { readCompileConfig, filterExcludePath, filterIncludePath, validatePaths, type CompileConfig } from '../utils/compile-config.js';
 import { ensureRootTsconfig } from '../utils/tsconfig.js';
 import { buildRuntimeGlobalsDeclaration } from '../utils/runtime-globals.js';
@@ -43,6 +44,20 @@ export async function compile(projectDir?: string): Promise<void> {
   } catch (e) {
     console.log(chalk.red(`.cocoscli/compile.config.json 解析失败：${e instanceof Error ? e.message : e}`));
     console.log(chalk.gray('  请检查配置文件 JSON 格式（如 { "strict": true }）'));
+    process.exit(1);
+  }
+
+  // 读已知非阻断配置（.cocoscli/known_nonblocking_errors.json，不存在自动生成默认模板）
+  let nbConfig: KnownNonblockingConfig | null = null;
+  try {
+    const nb = readNonblockingConfig(dir);
+    nbConfig = nb.config;
+    if (nb.created) {
+      console.log(chalk.yellow(`[提示] 已生成默认 .cocoscli/known_nonblocking_errors.json（已知非阻断错误清单），可按需编辑`));
+    }
+  } catch (e) {
+    console.log(chalk.red(`.cocoscli/known_nonblocking_errors.json 解析失败：${e instanceof Error ? e.message : e}`));
+    console.log(chalk.gray('  请检查配置文件 JSON 格式'));
     process.exit(1);
   }
 
@@ -161,18 +176,27 @@ export async function compile(projectDir?: string): Promise<void> {
     snippet: e.snippet && e.snippet.length > 0 ? e.snippet : readSnippet(path.join(dir, e.file), e.line),
   });
 
+  // 已知非阻断过滤（.cocoscli/known_nonblocking_errors.json，命中归优化问题不计 real）
+  const { kept: realErrors } = filterNonblockingCompile(classified.real, nbConfig);
+
   // 展示 real（真实 error，逐条；分类计数：语法 + 类型）
-  if (classified.real.length === 0) {
+  if (realErrors.length === 0) {
     console.log(chalk.green('无真实 error'));
   } else {
     console.log(
       chalk.red(
-        `发现 ${classified.real.length} 个真实 error（语法 ${classified.syntacticCount} + 类型 ${classified.semanticCount}）：`
+        `发现 ${realErrors.length} 个真实 error（语法 ${classified.syntacticCount} + 类型 ${classified.semanticCount}）：`
       )
     );
-    classified.real.forEach((e) => {
+    realErrors.forEach((e) => {
       console.log(chalk.gray(`  ${e.file}(${e.line},${e.column}): ${e.code} ${e.message}`));
     });
+  }
+
+  // 展示已知非阻断过滤摘要（命中规则归优化问题不计 real，不写入 log）
+  const nbFilteredCount = classified.real.length - realErrors.length;
+  if (nbFilteredCount > 0) {
+    console.log(chalk.gray(`\n[已过滤 ${nbFilteredCount} 条已知非阻断 error（优化问题，不计 real，不写入 log）]`));
   }
 
   // 展示 noise 摘要（折叠的第三方库声明噪音，编辑器不报/运行时正常）
@@ -206,14 +230,14 @@ export async function compile(projectDir?: string): Promise<void> {
     tsconfigPath: 'tsconfig.json',
     runtimeGlobals: config.runtimeGlobals ?? null,
     environmentErrors: diag.environmentErrors,
-    ok: classified.real.length === 0 && diag.environmentErrors.length === 0,
-    errorCount: classified.real.length,
+    ok: realErrors.length === 0 && diag.environmentErrors.length === 0,
+    errorCount: realErrors.length,
     excludedCount,
     excludedByInclude,
     excludedByExclude,
     includePaths: config.includePath ?? [],
     excludedPaths: config.excludePath ?? [],
-    errors: classified.real.map(withSnippet),
+    errors: realErrors.map(withSnippet),
     noiseSummary: classified.noiseSummary,
     noise: classified.noise.map(withSnippet),
   };

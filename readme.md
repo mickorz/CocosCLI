@@ -94,7 +94,7 @@ cocoscli lint D:\MyGame              # ESLint 检查指定工程
 
 `verify` 会：启动 CocosCreator → `tsc --noEmit` 编译检查 → 验证 MCP 与 preview 连通 → 调 opencode（非交互，`run --format json`）预览场景并事件流监控，最后输出 `.cocoscli/logs/verify/verify-report.md`。
 
-`compile` 调用 CocosMCP 的 `run_script_diagnostics` 做编译检查，忠实使用工程 `tsconfig.json`，支持 `compile.config.json` 配置 includePath/excludePath 白名单，生成 `.cocoscli/logs/compile/compile-log-*.json`（JSON 格式 + 时间戳文件名 + snippet 代码上下文）。工程根 `tsconfig.json` 缺失时自动生成推荐模板。
+`compile` 调用 CocosMCP 的 `run_script_diagnostics` 做编译检查，忠实使用工程 `tsconfig.json`，支持 `compile.config.json` 配置 includePath/excludePath 白名单，生成 `.cocoscli/logs/compile/compile-log-*.json`（JSON 格式 + 时间戳文件名 + snippet 代码上下文）。读 `.cocoscli/known_nonblocking_errors.json` 过滤已知非阻断 error（命中不计 real，不写入 log）；不存在自动生成默认模板。工程根 `tsconfig.json` 缺失时自动生成推荐模板。
 
 `lint` 忠实使用工程的 `.eslintrc.json` + `tsconfig.eslint.json` + 工程本地 ESLint，生成 `.cocoscli/logs/lint/eslint-log-*.json`。
 
@@ -116,7 +116,7 @@ cocoscli eval -f script.js D:\MyGame       # 从文件读代码执行（长脚�
 
 `eval` 在编辑器内执行任意 JS（CocosMCP execute_script）。scene 上下文注入 `require/cc/Editor/scene/director/args`，操作活场景树；editor 上下文注入 `require/Editor/args/fs/path/os`，用 Editor API 与文件操作。三种代码出口：直接 `return` / `run(env)` / `module.exports`。结果 JSON 打印 + 写 `.cocoscli/logs/eval/eval-log-*.json`。长脚本推荐 `-f` 文件入口（PowerShell 外层单引号防 `${}` 插值被吃）。
 
-`browserlogs` 通过 cdp-cli 读取 CDP Chrome 中预览页的控制台日志，支持级别/条数/关键词过滤。找不到预览页时会提示先跑 `previewscene`。
+`browserlogs` 通过 cdp-cli 读取 CDP Chrome 中预览页的控制台日志，支持级别/条数/关键词过滤。读 `.cocoscli/known_nonblocking_errors.json` 过滤已知非阻断日志（命中不计入 logs，不写入 log）。找不到预览页时会提示先跑 `previewscene`。
 
 ### 工具命令
 
@@ -136,6 +136,7 @@ cocoscli doctor                          # 依赖体检
 | `logs/build/build-log-*.json` `logs/build/build-raw-*.log` | build | 报错分类去重日志 / 原始全文 |
 | `logs/compile/compile-log-*.json` | compile | 编译诊断（JSON + 时间戳 + snippet） |
 | `compile.config.json` | compile | 编译检查配置（includePath/excludePath 白名单，根目录） |
+| `known_nonblocking_errors.json` | compile/browserlogs | 已知非阻断错误清单（compile code 精确匹配/browserlogs text 子串匹配，命中即过滤不写入 log；不存在自动生成默认模板，根目录） |
 | `logs/lint/eslint-log-*.json` | lint | ESLint 结构化结果 |
 | `logs/verify/verify-report.md` `logs/verify/verify-compile-*.json` | verify | 验证综合报告 / 各轮编译日志 |
 | `logs/eval/eval-log-*.json` | eval | 脚本执行结果 |
