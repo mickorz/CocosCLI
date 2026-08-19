@@ -19,7 +19,6 @@
 | `cocoscli previewscene <scene> [dir] [--save]` | 切换场景并获取预览地址，在浏览器打开预览 |
 | `cocoscli eval [code] [dir] [--context scene\|editor] [--args json] [-f file] [--timeout ms]` | 在编辑器内执行任意 JS（CocosMCP execute_script） |
 | `cocoscli browserlogs [dir] [--type] [--tail] [--grep]` | 读取浏览器控制台日志（cdp-cli） |
-| `cocoscli card-shoot [html] [out]` | 把卡片页 HTML 切成 3:4 高清图 |
 | `cocoscli doctor` | 依赖体检：检查 git/node/npm/cdp-cli 是否就绪 |
 
 ## 环境要求
@@ -27,7 +26,7 @@
 - Node.js >= 20.19.0
 - Cocos Creator 3.7.x（偏好 3.7.3）
 - git（init 克隆扩展、submodule 拉取需要）
-- cdp-cli（browserlogs/previewscene/card-shoot 依赖，随 cocoscli 一并安装，`npm run setup` 构建）
+- cdp-cli（browserlogs/previewscene 依赖，随 cocoscli 一并安装，`npm run setup` 构建）
 
 ## 安装
 
@@ -122,12 +121,8 @@ cocoscli eval -f script.js D:\MyGame       # 从文件读代码执行（长脚�
 ### 工具命令
 
 ```bash
-cocoscli card-shoot page.html            # 把卡片页 HTML 切成 3:4 高清图（默认输出到 cards/）
-cocoscli card-shoot page.html out/ -W 1080 -H 1440 --dpr 2
 cocoscli doctor                          # 依赖体检
 ```
-
-`card-shoot` 用 cdp-cli 把卡片页每个 section 切成一张 3:4 高清图，可指定视口尺寸、设备像素比、只切指定 section。
 
 `doctor` 检查 cocoscli 运行所需关键依赖（git/node/npm/cdp-cli），逐项输出 [完成]/[失败]。任一缺失会明确提示跑 `npm run setup`，对 AI / opencode 自动调用尤其重要。
 

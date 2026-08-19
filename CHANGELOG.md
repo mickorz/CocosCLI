@@ -21,7 +21,6 @@
 - `previewscene <scene>`：切换场景并获取预览地址，在浏览器打开预览。
 - `eval [code]`：在编辑器内执行任意 JS（CocosMCP `execute_script`），scene/editor 双上下文。
 - `browserlogs`：读取浏览器控制台日志（cdp-cli console），支持级别/条数/关键词过滤。
-- `card-shoot`：把卡片页 HTML 切成 3:4 高清图（cdp-cli）。
 - `list`：列出所有已执行 `init` 的工程（目录、CocosMCP 版本、MCP 端口）。
 - `doctor`：依赖体检（git/node/npm/cdp-cli），逐项输出 [完成]/[失败]。
 
@@ -77,6 +76,10 @@
 - `compile` 移除 `--strict` 参数，改用 `.cocoscli/compile.config.json` 配置驱动。
 - `compile` 从自拼 verify tsconfig 改为忠实使用工程 `tsconfig.json`。
 - `lint` 的 `process.chdir` 包进 try/finally（`withProjectCwd`），避免工作目录泄漏。
+
+### 移除
+
+- `card-shoot` 命令及对应实现（`src/commands/card-shoot.ts`）与测试，不再内置卡片页切图能力（可由外部 cdp-cli 直接完成）。
 
 ### 修复
 

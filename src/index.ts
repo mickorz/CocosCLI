@@ -27,7 +27,6 @@ import { lint } from './commands/lint.js';
 import { previewScene } from './commands/preview-scene.js';
 import { evalScript } from './commands/eval.js';
 import { browserLogs } from './commands/browser-logs.js';
-import { cardShoot } from './commands/card-shoot.js';
 import { doctor } from './commands/doctor.js';
 
 const program = new Command();
@@ -138,20 +137,6 @@ program
   .action(async (dir: string | undefined, options: Record<string, unknown>) => {
     await browserLogs(dir, options as Parameters<typeof browserLogs>[1]);
   });
-
-// card-shoot：把卡片页 HTML 切成每 section 一张 3:4 高清图（cdp-cli viewport + screenshot）
-program
-  .command('card-shoot [html] [out]')
-  .description('把卡片页 HTML 切成每 section 一张 3:4 高清图（cdp-cli，默认输出到 cards/）')
-  .option('-W, --width <w>', '视口宽（默认 1080）', (v: string) => parseInt(v, 10), 1080)
-  .option('-H, --height <h>', '视口高（默认 1440）', (v: string) => parseInt(v, 10), 1440)
-  .option('--dpr <n>', '设备像素比（默认 2）', (v: string) => parseInt(v, 10), 2)
-  .option('--sections <ids>', '只切指定 section（逗号分隔 id，如 what,concept）')
-  .action(
-    async (html: string | undefined, out: string | undefined, options: Record<string, unknown>) => {
-      await cardShoot(html, out, options as Parameters<typeof cardShoot>[2]);
-    }
-  );
 
 // doctor：依赖体检（检查 git/node/npm/cdp-cli 等关键依赖是否就绪）
 program
