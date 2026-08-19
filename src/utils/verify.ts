@@ -261,7 +261,7 @@ export async function runScriptDiagnosticsViaMcp(
   mcpPort = 3001,
   tsconfigPath?: string,
   virtualDeclarations?: { fileName: string; content: string }[]
-): Promise<{ errors: ScriptDiagnostic[]; environmentErrors: ScriptDiagnostic[]; ran: boolean }> {
+): Promise<{ errors: ScriptDiagnostic[]; environmentErrors: ScriptDiagnostic[]; ran: boolean; compileTime?: number }> {
   // run_script_diagnostics 调编辑器内置 tsc 编译 assets，耗时较长（可能 >5 秒），timeout 给 60 秒
   // P1: tsconfigPath 省略 → cocos-mcp 用工程 tsconfig.json（忠实模式，不自拼 verify tsconfig）
   // P2: virtualDeclarations → cocos-mcp VirtualDeclaration Host 注入 runtime globals bridge（不落盘）
@@ -285,7 +285,8 @@ export async function runScriptDiagnosticsViaMcp(
   const diagnostics = data.diagnostics as ScriptDiagnostic[];
   // P2: virtual declaration 自身 diagnostics（bridge 解析失败等），单独返回，不混业务 real
   const environmentErrors = Array.isArray(data.environmentErrors) ? (data.environmentErrors as ScriptDiagnostic[]) : [];
-  return { errors: diagnostics, environmentErrors, ran: true };
+  const compileTime = typeof data.compileTime === 'number' ? data.compileTime : undefined;
+  return { errors: diagnostics, environmentErrors, ran: true, compileTime };
 }
 
 // ==================== cocos-mcp execute_script（eval 任意代码执行） ====================

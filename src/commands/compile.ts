@@ -29,6 +29,7 @@ import { buildRuntimeGlobalsDeclaration } from '../utils/runtime-globals.js';
  * @param projectDir 工程目录，省略时默认当前执行目录
  */
 export async function compile(projectDir?: string): Promise<void> {
+  const t0 = Date.now();
   const dir = path.resolve(projectDir ?? process.cwd());
 
   if (!isCocosProject(dir)) {
@@ -129,6 +130,9 @@ export async function compile(projectDir?: string): Promise<void> {
   }
   const tsconfigArg = undefined; // 不传 → cocos-mcp findTsConfig 默认优先 project/tsconfig.json
 
+  const t1 = Date.now();
+  console.log(chalk.gray(`[耗时] 前置检查 ${t1 - t0}ms`));
+
   // P2/P3: 生成 runtime globals bridge（virtual declaration，不落盘，仅 checker 可见）
   // moduleExport: declare const <name>: typeof import("<module>").<export>;
   // namespaceAlias: import <name> = <target>;
@@ -153,6 +157,11 @@ export async function compile(projectDir?: string): Promise<void> {
     process.exit(1);
   }
   console.log(chalk.gray('[检查5] run_script_diagnostics 可用\n'));
+  const t2 = Date.now();
+  console.log(chalk.gray(`[耗时] 编译检查 cocos-mcp tsc ${t2 - t1}ms`));
+  if (diag.compileTime !== undefined) {
+    console.log(chalk.gray(`[耗时]   其中 cocos-mcp 内部 tsc ${diag.compileTime}ms`));
+  }
 
   // P2: Type Environment Resolution Error（virtual bridge 自身 diagnostics）
   // bridge 解析失败（如 module/export 无法解析）单独报告，绝不 fallback any，不混业务 real/noise
@@ -210,7 +219,7 @@ export async function compile(projectDir?: string): Promise<void> {
       typeEntries.slice(0, 10).forEach(([t, n]) => console.log(chalk.gray(`    ${t}: ${n}`)));
     }
     console.log(chalk.gray('  规则：TS2307 非相对路径(含 @/ alias)、TS2304 首字母大写名、TS2339/TS2551 同 type>5 归 noise'));
-    console.log(chalk.gray('  注：基于规则启发式可能误判，完整列表见 log JSON 的 noise 字段'));
+    console.log(chalk.gray('  注：基于规则启发式可能误判，完整列表不写入 log（仅 terminal 摘要）'));
   }
 
   // 展示 excluded（includePath 之外 + excludePath 匹配，不计 real/noise）
@@ -218,7 +227,7 @@ export async function compile(projectDir?: string): Promise<void> {
     const parts: string[] = [];
     if (excludedByInclude > 0) parts.push(`includePath 之外 ${excludedByInclude} 条`);
     if (excludedByExclude > 0) parts.push(`excludePath 匹配 ${excludedByExclude} 条（${(config.excludePath ?? []).join(', ')}）`);
-    console.log(chalk.gray(`\n[已排除 ${excludedCount} 条（${parts.join('，')}），不计 real/noise，详见 log]`));
+    console.log(chalk.gray(`\n[已排除 ${excludedCount} 条（${parts.join('，')}），不计 real/noise]`));
   }
 
   // 写 log（real 全量 + noise 全量 + 摘要，方便事后查误判）
@@ -238,7 +247,11 @@ export async function compile(projectDir?: string): Promise<void> {
     includePaths: config.includePath ?? [],
     excludedPaths: config.excludePath ?? [],
     errors: realErrors.map(withSnippet),
+    compileTime: diag.compileTime ?? null,
   };
   const logPath = writeCompileLog(dir, 'compile-log-', logData, 'compile');
   console.log(chalk.green(`\n编译报告已写入：${logPath}`));
+  const t3 = Date.now();
+  console.log(chalk.gray(`[耗时] 后处理 ${t3 - t2}ms`));
+  console.log(chalk.gray(`[耗时] 合计 ${t3 - t0}ms`));
 }
