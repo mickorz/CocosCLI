@@ -1,3 +1,5 @@
+import { spawnSync } from 'child_process';
+import * as path from 'path';
 import { WebSocket } from 'ws';
 
 // CDP 窗口控制工具
@@ -160,4 +162,61 @@ export async function focusAndMaximize(
   try { ws.close(); } catch { /* 忽略关闭错误 */ }
 
   return { maximized, activated, windowId };
+}
+
+/**
+ * OS 层 focus 浏览器窗口（CDP activateTarget 兜底）
+ *
+ * 当 CDP Target.activateTarget 未确认激活时，用系统命令把 Chrome 窗口拉到前台。
+ * 任一平台工具缺失或调用失败返回 false，不抛。
+ *
+ *   Windows  → PowerShell Wscript.Shell.AppActivate("Google Chrome")
+ *   macOS    → osascript tell application "Google Chrome" to activate
+ *   Linux    → wmctrl -a Chrome / xdotool search --name Chrome windowactivate
+ */
+export function osFocusBrowserChrome(): boolean {
+  try {
+    if (process.platform === 'win32') {
+      // Windows PowerShell 5.1 固定路径（System32\WindowsPowerShell\v1.0\powershell.exe）
+      // 用 SYSTEMROOT 构造全路径，避免 spawnSync 不搜索 PATH 找不到 powershell
+      const psPath = path.join(
+        process.env.SYSTEMROOT ?? 'C:\\Windows',
+        'System32',
+        'WindowsPowerShell',
+        'v1.0',
+        'powershell.exe'
+      );
+      // PS 脚本用双引号字符串，JS 用单引号包，无转义冲突
+      const script =
+        '$w = New-Object -ComObject Wscript.Shell; if ($w.AppActivate("Google Chrome")) { Write-Output "OK" } else { Write-Output "FAIL" }';
+      const r = spawnSync(psPath, ['-NoProfile', '-Command', script], {
+        encoding: 'utf-8',
+        timeout: 5000,
+        shell: false,
+      });
+      return r.status === 0 && (r.stdout ?? '').trim() === 'OK';
+    }
+
+    if (process.platform === 'darwin') {
+      const r = spawnSync(
+        'osascript',
+        ['-e', 'tell application "Google Chrome" to activate'],
+        { encoding: 'utf-8', timeout: 5000, shell: false }
+      );
+      return r.status === 0;
+    }
+
+    // Linux：优先 wmctrl，回退 xdotool
+    const tryCmd = (cmd: string, args: string[]): boolean => {
+      const rr = spawnSync(cmd, args, { encoding: 'utf-8', timeout: 5000, shell: false });
+      return rr.status === 0;
+    };
+    if (tryCmd('wmctrl', ['-a', 'Chrome'])) return true;
+    if (tryCmd('xdotool', ['search', '--onlyvisible', '--name', 'Chrome', 'windowactivate'])) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }

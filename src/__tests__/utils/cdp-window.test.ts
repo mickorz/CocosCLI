@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // 用 vi.hoisted 共享 mock 状态（vi.mock 工厂在 hoist 阶段执行，只能引用 hoisted 变量）
 const mock = vi.hoisted(() => ({
@@ -51,6 +51,13 @@ vi.mock('ws', () => ({
   },
 }));
 
+// mock child_process（osFocusBrowserChrome 用）：可按命令返回不同结果
+const osMock = vi.hoisted(() => ({
+  spawnSync: vi.fn(),
+  originalPlatform: process.platform,
+}));
+vi.mock('child_process', () => ({ spawnSync: osMock.spawnSync }));
+
 // mock global fetch（resolveBrowserWsUrl 用）
 vi.stubGlobal('fetch', vi.fn(async () => ({
   ok: mock.fetchOk,
@@ -59,7 +66,11 @@ vi.stubGlobal('fetch', vi.fn(async () => ({
   json: async () => mock.versionInfo,
 } as unknown as Response)));
 
-import { resolveBrowserWsUrl, focusAndMaximize } from '../../utils/cdp-window.js';
+import { resolveBrowserWsUrl, focusAndMaximize, osFocusBrowserChrome } from '../../utils/cdp-window.js';
+
+const setPlatform = (p: string) => {
+  Object.defineProperty(process, 'platform', { value: p, configurable: true });
+};
 
 beforeEach(() => {
   mock.responses = {};
@@ -67,6 +78,12 @@ beforeEach(() => {
   mock.versionInfo = { webSocketDebuggerUrl: 'ws://localhost:9223/devtools/browser/abc' };
   mock.fetchOk = true;
   vi.mocked(fetch).mockClear();
+  osMock.spawnSync.mockReset();
+  setPlatform(osMock.originalPlatform);
+});
+
+afterEach(() => {
+  setPlatform(osMock.originalPlatform);
 });
 
 describe('resolveBrowserWsUrl', () => {
@@ -146,5 +163,65 @@ describe('focusAndMaximize', () => {
     expect(r.maximized).toBe(false);
     expect(r.activated).toBe(false);
     expect(r.error).toMatch(/WebSocket 连接失败/);
+  });
+});
+
+describe('osFocusBrowserChrome', () => {
+  it('Windows：AppActivate 返回 OK → true', () => {
+    setPlatform('win32');
+    osMock.spawnSync.mockImplementation(() => ({ status: 0, stdout: 'OK' }));
+    expect(osFocusBrowserChrome()).toBe(true);
+  });
+
+  it('Windows：AppActivate 返回 FAIL → false', () => {
+    setPlatform('win32');
+    osMock.spawnSync.mockImplementation(() => ({ status: 0, stdout: 'FAIL' }));
+    expect(osFocusBrowserChrome()).toBe(false);
+  });
+
+  it('Windows：powershell 退出码非 0 → false', () => {
+    setPlatform('win32');
+    osMock.spawnSync.mockImplementation(() => ({ status: 1, stdout: '' }));
+    expect(osFocusBrowserChrome()).toBe(false);
+  });
+
+  it('macOS：osascript 成功 → true', () => {
+    setPlatform('darwin');
+    osMock.spawnSync.mockImplementation(() => ({ status: 0, stdout: '' }));
+    expect(osFocusBrowserChrome()).toBe(true);
+  });
+
+  it('Linux：wmctrl 成功 → true（不试 xdotool）', () => {
+    setPlatform('linux');
+    osMock.spawnSync.mockImplementation((cmd: string) => {
+      if (cmd === 'wmctrl') return { status: 0, stdout: '' };
+      return { status: 1, stdout: '' };
+    });
+    expect(osFocusBrowserChrome()).toBe(true);
+    const calls = osMock.spawnSync.mock.calls.map((c) => c[0]);
+    expect(calls).toEqual(['wmctrl']);
+  });
+
+  it('Linux：wmctrl 失败，xdotool 成功 → true', () => {
+    setPlatform('linux');
+    osMock.spawnSync.mockImplementation((cmd: string) => {
+      if (cmd === 'wmctrl') return { status: 1, stdout: '' };
+      return { status: 0, stdout: '' };
+    });
+    expect(osFocusBrowserChrome()).toBe(true);
+  });
+
+  it('Linux：wmctrl 与 xdotool 都失败 → false', () => {
+    setPlatform('linux');
+    osMock.spawnSync.mockImplementation(() => ({ status: 1, stdout: '' }));
+    expect(osFocusBrowserChrome()).toBe(false);
+  });
+
+  it('spawnSync 抛错时返回 false 不中断', () => {
+    setPlatform('win32');
+    osMock.spawnSync.mockImplementation(() => {
+      throw new Error('boom');
+    });
+    expect(osFocusBrowserChrome()).toBe(false);
   });
 });

@@ -112,7 +112,7 @@ cocoscli eval "return Editor.assetdb.uuidToUrl(args.id)" --context editor --args
 cocoscli eval -f script.js D:\MyGame       # 从文件读代码执行（长脚本推荐）
 ```
 
-`previewscene` 切换场景并获取预览地址（CocosMCP），在浏览器打开预览。默认丢弃未保存改动直接切换（不弹保存框），`--save` 切换前保存当前场景。预览打开后自动最大化浏览器窗口并激活置前（CDP setWindowBounds + activateTarget）。
+`previewscene` 切换场景并获取预览地址（CocosMCP），在浏览器打开预览。默认丢弃未保存改动直接切换（不弹保存框），`--save` 切换前保存当前场景。预览打开后自动最大化浏览器窗口并激活置前（CDP setWindowBounds + activateTarget，CDP 失败时 OS 层兜底）。
 
 `eval` 在编辑器内执行任意 JS（CocosMCP execute_script）。scene 上下文注入 `require/cc/Editor/scene/director/args`，操作活场景树；editor 上下文注入 `require/Editor/args/fs/path/os`，用 Editor API 与文件操作。三种代码出口：直接 `return` / `run(env)` / `module.exports`。结果 JSON 打印 + 写 `.cocoscli/eval-log-*.json`。长脚本推荐 `-f` 文件入口（PowerShell 外层单引号防 `${}` 插值被吃）。
 
