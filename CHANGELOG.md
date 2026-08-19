@@ -60,6 +60,7 @@
 - `eval --args <json>`：传 JSON 对象给代码的 `args`。
 - `eval --timeout <ms>`：执行超时（默认 120000）。
 - `browserlogs` 支持 `--type`/`--tail`/`--duration`/`--all`/`--grep`/`--page` 过滤。
+- `compile`/`browserlogs` 读 `.cocoscli/known_nonblocking_errors.json` 过滤已知非阻断项（compile 按 code 精确匹配+可选 file/message_contains 细化，browserlogs 按 text 子串匹配）；命中归优化问题不计入 errors/logs，log JSON 新增 `nonblocking`/`nonblockingCount` 字段；配置不存在自动生成默认模板。
 
 #### 发布与基础设施
 
