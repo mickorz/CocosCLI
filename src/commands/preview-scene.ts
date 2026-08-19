@@ -14,6 +14,7 @@ import {
 } from '../utils/verify.js';
 import { ensureCdpCli } from '../utils/dep-check.js';
 import { runCdpCliSync } from '../utils/cdp-cli.js';
+import { focusAndMaximize } from '../utils/cdp-window.js';
 import { checkCocosMcpDeps } from '../utils/git.js';
 
 // previewscene 命令：CocosMCP 切场景 + cdp-cli 在 CDP Chrome 打开预览
@@ -132,6 +133,7 @@ export async function previewScene(scene: string, projectDir?: string, save = fa
         `--user-data-dir=${userDataDir}`,
         '--no-first-run',
         '--no-default-browser-check',
+        '--start-maximized',
       ],
       { detached: true, stdio: 'ignore' }
     ).unref();
@@ -232,6 +234,18 @@ export async function previewScene(scene: string, projectDir?: string, save = fa
   );
   const evalOutput = (evalResult.stdout || '').trim();
   const ccReady = evalOutput.includes('object') || evalOutput.includes('function');
+
+  // 6. 最大化窗口 + 激活置前（CDP Browser.setWindowBounds + Target.activateTarget）
+  //    任一步失败不阻断主流程，仅黄字提示
+  console.log(chalk.gray('最大化并聚焦预览窗口...'));
+  const win = await focusAndMaximize(9223, pageId);
+  if (win.maximized && win.activated) {
+    console.log(chalk.gray('窗口已最大化并置前'));
+  } else if (win.maximized) {
+    console.log(chalk.yellow('窗口已最大化，但激活置前未确认（可能需手动点选）'));
+  } else {
+    console.log(chalk.yellow(`窗口控制未完成${win.error ? '：' + win.error : ''}`));
+  }
 
   // ===== 输出 =====
   console.log(chalk.green(`\n场景已切换：${target.name}`));

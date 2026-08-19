@@ -53,6 +53,7 @@
 
 - `previewscene` 默认丢弃未保存改动直接切换场景（不弹保存框）。
 - `previewscene --save`：切换前保存当前场景。
+- `previewscene` 预览打开后自动最大化浏览器窗口并激活置前（CDP `Browser.setWindowBounds` + `Target.activateTarget`，自动启动 Chrome 时叠加 `--start-maximized`；任一步失败仅黄字提示不阻断主流程）。
 - `eval` 三种代码出口：直接 `return` / `run(env)` / `module.exports`。
 - `eval --context scene|editor`：scene 注入 `require/cc/Editor/scene/director/args` 操作活场景树；editor 注入 `require/Editor/args/fs/path/os` 用 Editor API 与文件操作。
 - `eval -f <file>`：从文件读代码（长脚本推荐，规避一切转义）。
