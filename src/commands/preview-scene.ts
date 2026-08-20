@@ -16,6 +16,7 @@ import { ensureCdpCli } from '../utils/dep-check.js';
 import { runCdpCliSync } from '../utils/cdp-cli.js';
 import { focusAndMaximize, osFocusBrowserChrome } from '../utils/cdp-window.js';
 import { checkCocosMcpDeps } from '../utils/git.js';
+import { readPreviewConfig, resolvePreviewQuery, appendPreviewQuery } from '../utils/preview-config.js';
 
 // previewscene 命令：CocosMCP 切场景 + cdp-cli 在 CDP Chrome 打开预览
 //
@@ -41,8 +42,14 @@ function sleep(ms: number): Promise<void> {
  * @param scene 场景名（如 loading）
  * @param projectDir 工程目录，省略时默认当前执行目录
  * @param save 切换前保存当前场景（默认 false 丢弃切换）
+ * @param cliQuery 命令行 --query 值（临时覆盖配置文件，优先级 --query > scenes[场景] > default）
  */
-export async function previewScene(scene: string, projectDir?: string, save = false): Promise<void> {
+export async function previewScene(
+  scene: string,
+  projectDir?: string,
+  save = false,
+  cliQuery?: string
+): Promise<void> {
   const dir = path.resolve(projectDir ?? process.cwd());
 
   if (!scene) {
@@ -181,7 +188,7 @@ export async function previewScene(scene: string, projectDir?: string, save = fa
     process.exit(1);
   }
 
-  // 3. 拿 previewUrl
+  // 3. 拿 previewUrl + 拼预览参数（.cocoscli/preview.config.json，--query 临时覆盖）
   console.log(chalk.gray('获取预览地址...'));
   const previewUrl = await fetchPreviewUrl(mcpPort);
   if (!previewUrl) {
@@ -189,10 +196,27 @@ export async function previewScene(scene: string, projectDir?: string, save = fa
     process.exit(1);
   }
 
+  let previewQuery = '';
+  try {
+    const { config: previewConfig, created } = readPreviewConfig(dir);
+    if (created) {
+      console.log(chalk.gray('已生成预览参数配置模板：.cocoscli/preview.config.json（可编辑 default/scenes）'));
+    }
+    previewQuery = resolvePreviewQuery(scene, previewConfig, cliQuery);
+  } catch (e) {
+    console.log(chalk.red(`预览参数配置解析失败（.cocoscli/preview.config.json）：${(e as Error).message}`));
+    console.log(chalk.gray('  请修正 JSON 格式后重跑，或删除该文件重新生成模板。'));
+    process.exit(1);
+  }
+  const fullPreviewUrl = appendPreviewQuery(previewUrl, previewQuery);
+  if (previewQuery) {
+    console.log(chalk.gray(`预览参数：${previewQuery}`));
+  }
+
   // ===== cdp-cli：CDP Chrome 打开预览 + 验证 =====
 
   // 4. CDP Chrome 打开预览（拿已有页面 id → go 导航，比 new 更可靠）
-  console.log(chalk.gray(`\nCDP Chrome 打开预览：${previewUrl}...`));
+  console.log(chalk.gray(`\nCDP Chrome 打开预览：${fullPreviewUrl}...`));
   const tabsResult2 = runCdpCliSync(['tabs'], {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'ignore'],
@@ -207,7 +231,7 @@ export async function previewScene(scene: string, projectDir?: string, save = fa
   const pageId = firstPage.id;
   console.log(chalk.gray(`CDP 页面：${firstPage.title}（${pageId}）`));
 
-  const goResult = runCdpCliSync(['go', pageId, previewUrl], {
+  const goResult = runCdpCliSync(['go', pageId, fullPreviewUrl], {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'inherit'],
     timeout: 30000,
@@ -255,7 +279,7 @@ export async function previewScene(scene: string, projectDir?: string, save = fa
 
   // ===== 输出 =====
   console.log(chalk.green(`\n场景已切换：${target.name}`));
-  console.log(chalk.green(`预览地址：${previewUrl}`));
+  console.log(chalk.green(`预览地址：${fullPreviewUrl}`));
   if (ccReady) {
     console.log(chalk.green(`引擎就绪：window.cc = ${evalOutput}`));
   } else {

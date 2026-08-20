@@ -97,11 +97,16 @@ program
 
 // previewscene：切换场景并获取预览地址（CocosMCP scene_management + server_information）
 // 默认丢弃未保存改动直接切换（不弹保存框）；--save 切换前保存当前场景
+// 预览参数：.cocoscli/preview.config.json（default + scenes 场景级覆盖），--query 临时覆盖
 program
   .command('previewscene <scene> [dir]')
-  .description('切换场景并获取预览地址（CocosMCP），在浏览器打开预览；默认丢弃未保存改动直接切换（不弹窗），--save 保留改动')
+  .description('切换场景并获取预览地址（CocosMCP），在浏览器打开预览；默认丢弃未保存改动直接切换（不弹窗），--save 保留改动；预览地址参数读 .cocoscli/preview.config.json（场景级覆盖 default），--query 临时覆盖')
   .option('--save', '切换前保存当前场景（默认丢弃未保存改动直接切）')
-  .action(async (scene: string, dir?: string, options?: { save?: boolean }) => previewScene(scene, dir, options?.save === true));
+  .option('--query <query>', '预览地址参数（不含 ?，如 ui=10000&gameid=42272；临时覆盖 preview.config.json）')
+  .action(
+    async (scene: string, dir?: string, options?: { save?: boolean; query?: string }) =>
+      previewScene(scene, dir, options?.save === true, options?.query)
+  );
 
 // eval：在编辑器内执行任意 JS（CocosMCP execute_script，scene/editor 双上下文）
 // PowerShell 引号提示：外层用单引号（双引号会吃 JS 模板串 ${} 插值），JS 内部字符串用双引号；

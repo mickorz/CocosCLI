@@ -16,7 +16,7 @@
 | `cocoscli verify <scene> [dir]` | 验证：编译检查 + MCP/preview + opencode 预览场景 |
 | `cocoscli compile [dir]` | 编译检查（cocos-mcp run_script_diagnostics）+ 生成 log |
 | `cocoscli lint [dir]` | ESLint 代码规范检查（忠实工程 .eslintrc.json）+ 生成 eslint-log |
-| `cocoscli previewscene <scene> [dir] [--save]` | 切换场景并获取预览地址，在浏览器打开预览（自动最大化并置前窗口） |
+| `cocoscli previewscene <scene> [dir] [--save] [--query <query>]` | 切换场景并获取预览地址，在浏览器打开预览（自动最大化并置前窗口）；预览地址参数读 `.cocoscli/preview.config.json`（场景级覆盖 default），`--query` 临时覆盖 |
 | `cocoscli eval [code] [dir] [--context scene\|editor] [--args json] [-f file] [--timeout ms]` | 在编辑器内执行任意 JS（CocosMCP execute_script） |
 | `cocoscli browserlogs [dir] [--type] [--tail] [--grep]` | 读取浏览器控制台日志（cdp-cli） |
 | `cocoscli doctor` | 依赖体检：检查 git/node/npm/cdp-cli 是否就绪 |
@@ -103,6 +103,7 @@ cocoscli lint D:\MyGame              # ESLint 检查指定工程
 ```bash
 cocoscli previewscene loading              # 切换到 loading 场景并打开预览
 cocoscli previewscene loading --save       # 切换前保存当前场景（默认丢弃未保存改动直接切）
+cocoscli previewscene loading --query 'ui=10000&gameid=42272'   # 预览地址临时带参数（覆盖配置文件）
 cocoscli browserlogs                       # 读取预览页控制台日志
 cocoscli browserlogs --type error          # 只看 error 级别
 cocoscli browserlogs --tail 50             # 只看最后 50 条
@@ -113,6 +114,18 @@ cocoscli eval -f script.js D:\MyGame       # 从文件读代码执行（长脚�
 ```
 
 `previewscene` 切换场景并获取预览地址（CocosMCP），在浏览器打开预览。默认丢弃未保存改动直接切换（不弹保存框），`--save` 切换前保存当前场景。预览打开后自动最大化浏览器窗口并激活置前（CDP setWindowBounds + activateTarget，CDP 失败时 OS 层兜底）。
+
+预览地址支持带参数（如 `http://localhost:7456/?ui=10000&gameid=42272`），读 `.cocoscli/preview.config.json`（首次运行自动生成模板，可编辑）：
+
+```json
+{
+  "$schema": "previewscene 预览地址参数配置。优先级：命令行 --query > scenes[场景名] > default > 不加参数。query 值不含 ? 前缀，多个参数用 & 连接。",
+  "default": "ui=10000&gameid=42272",
+  "scenes": { "loading": "ui=10000&gameid=42272" }
+}
+```
+
+优先级：`--query` 临时覆盖 > `scenes[场景名]` 场景级 > `default` 工程默认 > 不加参数。`--query` 值不含 `?` 前缀（PowerShell 下整体加引号，`&` 是特殊字符）。
 
 `eval` 在编辑器内执行任意 JS（CocosMCP execute_script）。scene 上下文注入 `require/cc/Editor/scene/director/args`，操作活场景树；editor 上下文注入 `require/Editor/args/fs/path/os`，用 Editor API 与文件操作。三种代码出口：直接 `return` / `run(env)` / `module.exports`。结果 JSON 打印 + 写 `.cocoscli/logs/eval/eval-log-*.json`。长脚本推荐 `-f` 文件入口（PowerShell 外层单引号防 `${}` 插值被吃）。
 

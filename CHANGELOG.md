@@ -19,6 +19,7 @@
 - `compile [dir]`：编译检查（调 CocosMCP `run_script_diagnostics`），忠实使用工程 `tsconfig.json`。
 - `lint [dir]`：ESLint 代码规范检查（忠实工程 `.eslintrc.json` + `tsconfig.eslint.json` + 工程本地 ESLint）。
 - `previewscene <scene>`：切换场景并获取预览地址，在浏览器打开预览。
+- `previewscene` 预览地址带参数：读 `.cocoscli/preview.config.json`（`default` 工程默认 + `scenes` 场景级覆盖，首次运行自动生成模板），`--query` 临时覆盖；优先级 `--query` > `scenes[场景名]` > `default` > 不加参数。
 - `eval [code]`：在编辑器内执行任意 JS（CocosMCP `execute_script`），scene/editor 双上下文。
 - `browserlogs`：读取浏览器控制台日志（cdp-cli console），支持级别/条数/关键词过滤。
 - `list`：列出所有已执行 `init` 的工程（目录、CocosMCP 版本、MCP 端口）。
