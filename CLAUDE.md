@@ -77,6 +77,30 @@ npm test            # vitest 单测
 npm link            # 全局链接 cocoscli（同时得到 cocoscli 与 cdp-cli 命令）
 ```
 
+## 同步到 game-mahjong cocos_tools 副本
+
+本库每次 git 提交后，必须同步一次到 game-mahjong 的 cocos_tools 副本：
+
+```
+python sync_to_cocos_tools.py
+```
+
+- 目标：`E:\WorkProjects\xc-flow\.xflow\xc\xcodeDev\game-mahjong\client\cocos_tools\cocoscli`
+- 镜像同步、增量复制（按大小 + 修改时间）；源里删除的文件目标同步删除
+- 不复制 git 元信息（.git / .gitmodules / .gitattributes）
+- `.gitignore` 目标侧独立维护（需提交 deps/node_modules，不覆盖不删除）
+- 副本侧已删除 .git，是普通目录，归 game-mahjong 自己的仓库管理
+
+## 提交后同步触发规则
+
+凡在本仓库执行 `git commit`（含 amend、merge 产生的提交），提交完成后立即执行一次同步：
+
+1. `python sync_to_cocos_tools.py`（在仓库根目录）
+2. 查看输出确认：`[完成] 复制 N 个文件 ... 删除 M 项`，无 `[失败]`
+3. 有报错时先修复同步问题，再继续其他任务
+
+多个提交连续进行时，可全部提交完后同步一次（以最后一次为准）。
+
 ## 发布注意事项（submodule/vendor）
 
 发布前必看 [Docs/cocoscli-submodule发布问题记录.md](../Docs/cocoscli-submodule发布问题记录.md)。关键点：
