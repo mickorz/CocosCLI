@@ -6,3 +6,7 @@ vendor/
 *.tgz
 cards/
 .idea/
+
+# 本机同步脚本（同步到 game-mahjong cocos_tools / extensions，不入库）
+sync_to_cocos_tools.py
+sync_cocosmcp_to_extensions.py
