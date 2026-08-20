@@ -27,6 +27,8 @@
 
 #### 工程管理
 
+- `waitForMcpReady` / `fetchMcpHealth` / `httpGetJson` / `describeMcpPhase`（`src/utils/verify.ts`）：轮询 CocosMCP `/health` 直到 `ready:true`，阶段变化回调防刷屏；旧版 CocosMCP（`/health` 无 `ready` 字段）自动降级为「HTTP 可达即就绪」（`legacy` 标记），行为不劣于旧判据。
+- CocosMCP 1.5.5：`/health` 新增 `ready`/`phase`/`detail`/`version` 字段（保留 `status`/`tools` 向后兼容）；MCPServer 内置四项就绪状态机（extensionLoaded/serverStarted/toolsRegistered/sceneReady），`scene:ready` 闩锁经 `updateReadyState` 推送。
 - 全局工程注册表（`~/.cocoscli/projects.json`）：`init` 登记、`remove` 注销、`list` 读取。
 - MCP 端口自动错开：未传 `-p` 时读全局注册表挑空闲端口（首个工程 3001），多工程端口不冲突。
 - `init -p <port>` 显式指定端口；撞已注册工程端口时直接中断并红字报冲突、推荐空闲端口。
@@ -73,6 +75,9 @@
 
 ### 变更
 
+- `open` 由「spawn 后立即返回成功」改为「等待工程真正就绪」：就绪 = CocosMCP server 启动 + 工具注册 + 场景就绪（`/health ready:true`），最多 300 秒超时退出码 1 并提示卡住的阶段；已开则直接等就绪；未装 CocosMCP 的工程保持旧行为（spawn 即返回 + 黄字提示）。**open 返回（exit 0）= 工程可被后续 CLI/MCP 操作**，下游 `compile` 前不再需要外挂等待脚本（wait_mcp_ready.py 可退役）。
+- `init` 第七步打开工程复用同一等待逻辑（`openAndWaitReady`），init 返回即工程可操作。
+- `verify` 第1步等待 CocosMCP 就绪的 18×5s 手写轮询替换为 `waitForMcpReady`（90 秒上限不变；新版 CocosMCP 下等到完整 ready 含场景就绪）。
 - `init` 安装 CocosMCP 由 submodule 改为 plain git clone，再改为 vendor/deps copy 优先 + fallback 远端。
 - `open` 与 `init` 改为默认免登录（`--nologin`），原为可选 `--nologin` flag。
 - spinner 由 ora unicode symbols 改为纯文本 ASCII。

@@ -6,8 +6,8 @@ cocoscli —— 面向 Cocos Creator 3.7.x 的命令行工具。
 
 | 命令 | 说明 |
 |---|---|
-| `cocoscli init [dir] [-p port]` | 装 CocosMCP（普通 clone）+ build + 写 mcp-server.json / opencode.json + 打开（默认免登录），dir 省略时为当前目录；端口优先级 mcp-server.json 已有 > 显式 -p（撞已注册工程直接中断并推荐空闲口）> 自动错开（读全局注册表挑空闲口，首个 3001） |
-| `cocoscli open [dir]` | 打开工程（默认免登录，已开则跳过） |
+| `cocoscli init [dir] [-p port]` | 装 CocosMCP（普通 clone）+ build + 写 mcp-server.json / opencode.json + 打开并等待就绪（默认免登录，openAndWaitReady 同 open 语义），dir 省略时为当前目录；端口优先级 mcp-server.json 已有 > 显式 -p（撞已注册工程直接中断并推荐空闲口）> 自动错开（读全局注册表挑空闲口，首个 3001） |
+| `cocoscli open [dir]` | 打开工程并等待真正就绪（默认免登录）：就绪 = CocosMCP server 启动 + 工具注册 + 场景就绪（/health ready:true），最多 300 秒超时 exit 1 并提示卡住阶段；已开则直接等就绪；未装 CocosMCP 保持旧行为（spawn 即返回）；旧版 CocosMCP（/health 无 ready 字段）降级为 HTTP 可达即就绪 + 黄字提示升级。open exit 0 = 工程可被后续 CLI/MCP 操作 |
 | `cocoscli close [dir]` | 关闭工程对应的 CocosCreator 进程 |
 | `cocoscli remove [dir]` | 卸载 CocosMCP（关闭工程 + 删扩展 + 删配置 + 从全局列表注销） |
 | `cocoscli list` | 列出已执行 init 的工程（目录、CocosMCP 版本、MCP 端口，全局 ~/.cocoscli/projects.json） |

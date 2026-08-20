@@ -6,6 +6,8 @@ import { getCocosCreatorPath, openCocosProject } from '../utils/cocos.js';
 import {
   runScriptDiagnosticsViaMcp,
   verifyMcpConnection,
+  waitForMcpReady,
+  describeMcpPhase,
   warnProxyIfLoopbackBlocked,
   httpOk,
   fetchPreviewUrl,
@@ -100,17 +102,11 @@ export async function verify(projectDir: string | undefined, scene: string): Pro
     report.push('## 第1步 启动 CocosCreator', '- 已拉起 CocosCreator', '');
   }
 
-  // 轮询 CocosMCP health 直到就绪（替代固定 sleep，CocosCreator 启动慢时等够）
+  // 轮询 CocosMCP health 直到真正就绪（新版等到 ready:true 含场景就绪；旧版降级为 HTTP 可达，与原语义一致）
   console.log(chalk.gray(`  等待 CocosMCP 就绪（轮询 ${mcpPort}/health，最多 90 秒）...`));
-  let mcpReady = false;
-  for (let i = 0; i < 18; i++) {
-    if (await verifyMcpConnection(mcpPort)) {
-      mcpReady = true;
-      break;
-    }
-    await sleep(5000);
-  }
-  console.log(chalk.gray(`  CocosMCP ${mcpReady ? '已就绪' : '未就绪（超时，后续 MCP 验证可能失败）'}`));
+  const readyResult = await waitForMcpReady(mcpPort, { timeoutMs: 90_000, intervalMs: 5_000 });
+  const mcpReady = readyResult.ok;
+  console.log(chalk.gray(`  CocosMCP ${mcpReady ? '已就绪' : `未就绪（超时，卡在阶段：${describeMcpPhase(readyResult.phase)}）`}`));
   // 未就绪时追查根因：扩展没装 / 手动复制漏 node_modules（面板 Cannot find module → MCP 起不来）
   if (!mcpReady) {
     const extDir = path.join(dir, 'extensions', 'CocosMCP');

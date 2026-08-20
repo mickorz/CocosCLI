@@ -42,13 +42,17 @@ program
   .command('init [dir]')
   .description('为 Cocos 工程安装 CocosMCP 扩展并打开（默认免登录），dir 省略时为当前目录')
   .option('-p, --port <port>', 'CocosMCP 端口（省略时按全局注册表自动错开，首个工程 3001）')
-  .action((dir: string | undefined, options: { port?: string }) => init(dir, options.port ? parseInt(options.port, 10) : undefined));
+  .action(async (dir: string | undefined, options: { port?: string }) => {
+    await init(dir, options.port ? parseInt(options.port, 10) : undefined);
+  });
 
-// open：用 CocosCreator 打开工程，dir 省略时为当前目录
+// open：用 CocosCreator 打开工程并等待真正就绪（/health ready），dir 省略时为当前目录
 program
   .command('open [dir]')
-  .description('用 CocosCreator 打开工程（默认免登录），dir 省略时为当前目录')
-  .action((dir?: string) => open(dir));
+  .description('用 CocosCreator 打开工程并等待就绪（默认免登录；就绪 = CocosMCP server + 工具注册 + 场景就绪，最多 300 秒，超时退出码 1），dir 省略时为当前目录')
+  .action(async (dir?: string) => {
+    await open(dir);
+  });
 
 // close：关闭工程对应的 CocosCreator 进程，dir 省略时为当前目录
 program

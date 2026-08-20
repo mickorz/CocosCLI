@@ -119,6 +119,171 @@ export function verifyMcpConnection(port = 3001): Promise<boolean> {
   return httpOk(`http://127.0.0.1:${port}/health`);
 }
 
+/** GET JSON，返回解析后的对象（非 2xx / 坏 JSON / 网络错误返回 null） */
+export function httpGetJson(
+  url: string,
+  timeoutMs = 5000
+): Promise<Record<string, unknown> | null> {
+  return new Promise((resolve) => {
+    const req = http.get(url, { timeout: timeoutMs }, (res) => {
+      if (res.statusCode === undefined || res.statusCode >= 400) {
+        res.resume();
+        resolve(null);
+        return;
+      }
+      let chunks = '';
+      res.on('data', (c) => (chunks += c));
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(chunks) as Record<string, unknown>);
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(null);
+    });
+  });
+}
+
+/** /health 响应结构（旧版 CocosMCP 只有 status/tools，ready 及之后字段是 1.5.5+ 新增） */
+export interface McpHealth {
+  status?: string;
+  tools?: number;
+  version?: string;
+  ready?: boolean;
+  phase?: string;
+  detail?: {
+    extensionLoaded?: boolean;
+    serverStarted?: boolean;
+    toolsRegistered?: boolean;
+    sceneReady?: boolean;
+  };
+}
+
+/** 单次探测 /health：reachable = HTTP 可达（与旧 httpOk 同判据），health = body 解析结果 */
+export interface McpHealthCheck {
+  reachable: boolean;
+  health: McpHealth | null;
+}
+
+/** 单次探测 CocosMCP /health（不轮询） */
+export async function fetchMcpHealth(port: number): Promise<McpHealthCheck> {
+  const health = await httpGetJson(`http://127.0.0.1:${port}/health`);
+  // body 解析失败但端口有响应（非 JSON / 空 body）也算可达，与旧 httpOk 判据一致
+  if (health) return { reachable: true, health };
+  const reachable = await httpOk(`http://127.0.0.1:${port}/health`);
+  return { reachable, health: null };
+}
+
+/** 等待就绪过程中的阶段（超时时据此提示卡在哪一步） */
+export type McpReadyPhase =
+  | 'connecting'        // HTTP 不可达（扩展未加载 / server 未启动 / 端口被占）
+  | 'extensionLoading'  // 扩展 load 未完成
+  | 'serverStarting'    // HTTP server 未 listen 成功
+  | 'toolsRegistering'  // 工具列表未装配完成
+  | 'sceneLoading'      // scene:ready 未触发（资源导入中 / 未恢复场景）
+  | 'ready';            // 完全就绪
+
+/** waitForMcpReady 结果 */
+export interface WaitForMcpReadyResult {
+  ok: boolean;
+  /** 旧版 CocosMCP（/health 无 ready 字段）：降级为「HTTP 可达即就绪」（旧语义） */
+  legacy: boolean;
+  /** 超时/失败时卡住的阶段；成功时为 ready */
+  phase: McpReadyPhase;
+  elapsedMs: number;
+  /** 最后一次成功解析的 /health 响应（可达时才有） */
+  health?: McpHealth;
+}
+
+/** waitForMcpReady 选项 */
+export interface WaitForMcpReadyOptions {
+  /** 总超时（毫秒），默认 300000（大工程首次打开含资源导入） */
+  timeoutMs?: number;
+  /** 轮询间隔（毫秒），默认 3000 */
+  intervalMs?: number;
+  /** 阶段变化回调（防刷屏：只在阶段切换时触发，不每 tick 触发） */
+  onProgress?: (phase: McpReadyPhase) => void;
+}
+
+/** 服务端 phase 字符串 → 本地阶段枚举（未知值归 sceneLoading 之前的通用等待） */
+function mapServerPhase(serverPhase: string | undefined): McpReadyPhase {
+  switch (serverPhase) {
+    case 'extensionLoading': return 'extensionLoading';
+    case 'serverStarting': return 'serverStarting';
+    case 'toolsRegistering': return 'toolsRegistering';
+    case 'sceneLoading': return 'sceneLoading';
+    case 'ready': return 'ready';
+    default: return 'serverStarting';
+  }
+}
+
+/**
+ * 轮询 CocosMCP /health 直到真正就绪（ready === true）
+ *
+ * 语义：
+ * - ready === true                → ok（新版 CocosMCP 完全就绪：server + 工具 + 场景）
+ * - ready 字段缺失（旧版/坏 JSON）→ 降级：HTTP 可达即 ok，legacy = true（等价旧 httpOk 判据）
+ * - ready === false               → 继续等，phase 反映服务端卡住的阶段
+ * - 超时                          → ok = false，phase 为最后阶段
+ *
+ * @param port CocosMCP HTTP 端口
+ */
+export async function waitForMcpReady(
+  port: number,
+  options: WaitForMcpReadyOptions = {}
+): Promise<WaitForMcpReadyResult> {
+  const timeoutMs = options.timeoutMs ?? 300_000;
+  const intervalMs = options.intervalMs ?? 3_000;
+  const start = Date.now();
+  let phase: McpReadyPhase = 'connecting';
+  let lastHealth: McpHealth | undefined;
+
+  const emit = (next: McpReadyPhase) => {
+    if (next !== phase) {
+      phase = next;
+      options.onProgress?.(phase);
+    }
+  };
+
+  while (Date.now() - start < timeoutMs) {
+    const check = await fetchMcpHealth(port);
+    if (check.health) lastHealth = check.health;
+
+    if (!check.reachable) {
+      emit('connecting');
+    } else if (check.health?.ready === true) {
+      emit('ready');
+      return { ok: true, legacy: false, phase, elapsedMs: Date.now() - start, health: lastHealth };
+    } else if (check.health?.ready === undefined) {
+      // 旧版 CocosMCP（/health 无 ready 字段）或坏 JSON：降级旧语义
+      emit('ready');
+      return { ok: true, legacy: true, phase, elapsedMs: Date.now() - start, health: lastHealth };
+    } else {
+      emit(mapServerPhase(check.health.phase));
+    }
+
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return { ok: false, legacy: false, phase, elapsedMs: Date.now() - start, health: lastHealth };
+}
+
+/** 阶段中文描述（open / verify 命令输出共用） */
+export function describeMcpPhase(phase: McpReadyPhase): string {
+  switch (phase) {
+    case 'connecting': return '等待 CocosMCP server 启动（HTTP 不可达，扩展可能还在加载）';
+    case 'extensionLoading': return '等待扩展加载';
+    case 'serverStarting': return '等待 MCP server 启动';
+    case 'toolsRegistering': return '等待工具注册';
+    case 'sceneLoading': return '等待场景就绪（scene:ready，资源导入中）';
+    case 'ready': return '就绪';
+  }
+}
+
 /** 命中的代理环境变量 */
 export interface ProxyEnvHit {
   varName: string;  // 如 'http_proxy' / 'HTTP_PROXY'

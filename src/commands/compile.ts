@@ -106,7 +106,7 @@ export async function compile(projectDir?: string): Promise<void> {
   const mcpOk = await verifyMcpConnection(mcpPort);
   if (!mcpOk) {
     console.log(chalk.red(`[检查3] CocosMCP HTTP server 不可访问（端口 ${mcpPort}）`));
-    console.log(chalk.gray('  CocosCreator 可能没开，或 CocosMCP 扩展没加载。先跑 cocoscli open。'));
+    console.log(chalk.gray('  CocosCreator 可能没开或未就绪。先跑 cocoscli open（open 返回即工程可操作，已装 CocosMCP 时会等到场景就绪）。'));
     warnProxyIfLoopbackBlocked();
     process.exit(1);
   }

@@ -8,7 +8,7 @@
 | 命令 | 说明 |
 |---|---|
 | `cocoscli init [dir] [-p port]` | 为工程安装 CocosMCP 扩展 + build + 写配置 + 打开（默认免登录）；端口优先级 mcp-server.json 已有 > 显式 `-p`（撞已注册工程直接中断）> 自动错开（首个 3001） |
-| `cocoscli open [dir]` | 用 CocosCreator 打开工程（默认免登录），已开则跳过 |
+| `cocoscli open [dir]` | 用 CocosCreator 打开工程并等待真正就绪（默认免登录）：就绪 = CocosMCP server 启动 + 工具注册 + 场景就绪（/health `ready:true`），最多 300 秒超时退出码 1 并提示卡住阶段；已开则直接等就绪；未装 CocosMCP 保持旧行为；**open 返回（exit 0）= 工程可被后续 CLI/MCP 操作** |
 | `cocoscli close [dir]` | 关闭工程对应的 CocosCreator 进程 |
 | `cocoscli remove [dir]` | 卸载 CocosMCP（关闭工程 + 删扩展 + 删配置 + 从全局列表注销） |
 | `cocoscli list` | 列出已执行 `init` 的工程（目录、CocosMCP 版本、MCP 端口） |
@@ -52,15 +52,17 @@ npm link
 cocoscli init                # 初始化当前目录工程并打开（默认免登录）
 cocoscli init D:\MyGame      # 初始化指定工程
 cocoscli init -p 3002        # 指定 MCP 端口（省略时自动错开，首个工程 3001）
-cocoscli open                # 打开当前目录工程（已开则跳过）
-cocoscli open D:\MyGame      # 打开指定工程（默认免登录）
+cocoscli open                # 打开当前目录工程并等待就绪（已开则直接等就绪）
+cocoscli open D:\MyGame      # 打开指定工程（默认免登录，等 /health ready:true，最多 300 秒）
 cocoscli close               # 关闭当前目录对应的进程
 cocoscli close D:\MyGame     # 关闭指定工程对应的进程
 cocoscli remove              # 卸载当前目录的 CocosMCP
 cocoscli list                # 列出所有已注册工程
 ```
 
-`init` 会依次执行：定位 CocosCreator → 判定 Cocos 3.x 工程 → 安装 CocosMCP（优先 `vendor/CocosMCP` copy → `deps/CocosMCP` → fallback GitHub clone）→ build 扩展 → 写 `settings/mcp-server.json` → 用 CocosCreator 打开（追加 `--nologin`）→ 登记到全局工程注册表。
+`init` 会依次执行：定位 CocosCreator → 判定 Cocos 3.x 工程 → 安装 CocosMCP（优先 `vendor/CocosMCP` copy → `deps/CocosMCP` → fallback GitHub clone）→ build 扩展 → 写 `settings/mcp-server.json` → 用 CocosCreator 打开并等待就绪（追加 `--nologin`，`/health ready:true`，同 open 语义）→ 登记到全局工程注册表。
+
+`open` 的就绪判定链：扩展加载 → MCP server 启动 → 工具注册 → 场景就绪（`scene:ready`），四项全真时 CocosMCP `/health` 返回 `ready:true`。旧版 CocosMCP（`/health` 无 `ready` 字段，1.5.5 之前）降级为「HTTP 可达即就绪」并黄字提示；升级方式：`cocoscli remove <dir>` 后重跑 `cocoscli init <dir>`（保留原端口：`cocoscli list` 查原端口后 `-p` 指定）。极少数工程（全新、从未保存过场景）不会自动恢复场景，`scene:ready` 不来会超时——在编辑器手动打开任一场景后重跑 `cocoscli open` 即可续等成功。
 
 `close` 通过匹配 CocosCreator 进程命令行的 `--project` 参数定位目标工程，精确比对路径，不会误关同名前缀工程。
 

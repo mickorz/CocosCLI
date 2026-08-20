@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import { createSpinner, spinnerSucceed, spinnerFail } from '../utils/spinner.js';
-import { getCocosCreatorPath, openCocosProject } from '../utils/cocos.js';
+import { getCocosCreatorPath } from '../utils/cocos.js';
 import { isCocosProject } from '../utils/project.js';
 import {
   cloneCocosMcp,
@@ -14,6 +14,7 @@ import {
   writeOpencodePermission,
 } from '../utils/git.js';
 import { getRegistryPath, upsertProject, findPortOccupant, findAvailablePort } from '../utils/registry.js';
+import { openAndWaitReady } from './open.js';
 
 /**
  * 读工程已有 settings/mcp-server.json 的端口
@@ -50,14 +51,14 @@ function readExistingMcpPort(dir: string): number | null {
  *   4. 构建 CocosMCP（npm install + build，生成 dist；全新安装或依赖/dist 缺失才跑，按需构建）
  *   5. 写入默认 mcp-server.json 到 settings/（已存在则跳过）
  *   6. 写入默认 opencode.json 到工程根（放开 external_directory 权限，供 verify 使用）
- *   7. 打开工程（复用 open 的核心函数）
+ *   7. 打开工程并等待真正就绪（复用 openAndWaitReady：/health ready:true，超时中断）
  *   8. 登记到全局工程列表（~/.cocoscli/projects.json，cocoscli list 读取）
  *
  * @param projectDir 工程目录，省略时默认当前执行目录
  * @param port CocosMCP 端口；省略时自动错开（读全局注册表挑空闲口，首个工程 3001），
  *             显式指定撞已注册工程时直接中断并推荐空闲端口
  */
-export function init(projectDir?: string, port?: number, noLogin = true): void {
+export async function init(projectDir?: string, port?: number, noLogin = true): Promise<void> {
   const dir = path.resolve(projectDir ?? process.cwd());
 
   // 第一步：定位 CocosCreator
@@ -161,9 +162,8 @@ export function init(projectDir?: string, port?: number, noLogin = true): void {
     process.exit(1);
   }
 
-  // 第七步：打开工程
-  openCocosProject(creatorPath, dir, noLogin);
-  console.log(chalk.green(`已用 CocosCreator 打开工程：${dir}${noLogin ? '（免登录）' : ''}`));
+  // 第七步：打开工程并等待真正就绪（/health ready:true；旧版 CocosMCP 降级为 HTTP 可达即就绪）
+  await openAndWaitReady(dir, creatorPath, noLogin, portToWrite);
   console.log(chalk.gray('提示：extensions/CocosMCP 未纳入父仓库管理，如需忽略请在 .gitignore 添加'));
 
   // 第八步：登记到全局工程列表（cocoscli list 读取）
