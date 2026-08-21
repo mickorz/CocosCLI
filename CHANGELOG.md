@@ -28,6 +28,7 @@
 #### 工程管理
 
 - `waitForMcpReady` / `fetchMcpHealth` / `httpGetJson` / `describeMcpPhase`（`src/utils/verify.ts`）：轮询 CocosMCP `/health` 直到 `ready:true`，阶段变化回调防刷屏；旧版 CocosMCP（`/health` 无 `ready` 字段）自动降级为「HTTP 可达即就绪」（`legacy` 标记），行为不劣于旧判据。
+- `open` / `init` 打印各阶段耗时与总耗时：阶段切换进度行带 `[+Ns]` 时间戳，成功与超时分支均输出「阶段耗时：连接 server Xs → 工具注册 Xs → 场景加载 Xs，总耗时 Xs」汇总行（超时分支尾阶段标注「卡住」）；`waitForMcpReady` 的 `onProgress` 回调新增 `elapsedMs` 参数（切入时刻）供调用方结算。
 - CocosMCP 1.5.5：`/health` 新增 `ready`/`phase`/`detail`/`version` 字段（保留 `status`/`tools` 向后兼容）；MCPServer 内置四项就绪状态机（extensionLoaded/serverStarted/toolsRegistered/sceneReady），`scene:ready` 闩锁经 `updateReadyState` 推送。
 - 全局工程注册表（`~/.cocoscli/projects.json`）：`init` 登记、`remove` 注销、`list` 读取。
 - MCP 端口自动错开：未传 `-p` 时读全局注册表挑空闲端口（首个工程 3001），多工程端口不冲突。

@@ -206,8 +206,9 @@ export interface WaitForMcpReadyOptions {
   timeoutMs?: number;
   /** 轮询间隔（毫秒），默认 3000 */
   intervalMs?: number;
-  /** 阶段变化回调（防刷屏：只在阶段切换时触发，不每 tick 触发） */
-  onProgress?: (phase: McpReadyPhase) => void;
+  /** 阶段变化回调（防刷屏：只在阶段切换时触发，不每 tick 触发）；
+   *  elapsedMs = 本次切换时刻距开始轮询的毫秒数（供调用方结算各阶段耗时） */
+  onProgress?: (phase: McpReadyPhase, elapsedMs: number) => void;
 }
 
 /** 服务端 phase 字符串 → 本地阶段枚举（未知值归 sceneLoading 之前的通用等待） */
@@ -246,7 +247,7 @@ export async function waitForMcpReady(
   const emit = (next: McpReadyPhase) => {
     if (next !== phase) {
       phase = next;
-      options.onProgress?.(phase);
+      options.onProgress?.(phase, Date.now() - start);
     }
   };
 

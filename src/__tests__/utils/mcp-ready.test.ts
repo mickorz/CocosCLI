@@ -138,15 +138,23 @@ describe('waitForMcpReady', () => {
       else jsonRes(res, { status: 'ok', ready: true, phase: 'ready' });
     });
     const phases: string[] = [];
+    const elapsed: number[] = [];
     const result = await waitForMcpReady(port, {
       timeoutMs: 3_000,
       intervalMs: 50,
-      onProgress: (p) => phases.push(p),
+      onProgress: (p, elapsedMs) => {
+        phases.push(p);
+        elapsed.push(elapsedMs);
+      },
     });
     expect(result.ok).toBe(true);
     // 首 tick sceneLoading（connecting 之后第一次成功探测即切阶段），随后 ready
     expect(phases).toEqual(['sceneLoading', 'ready']);
     expect(result.phase).toBe('ready');
+    // 回调携带切入时刻：非负且不早于上一阶段（供调用方结算各阶段耗时）
+    expect(elapsed.length).toBe(2);
+    expect(elapsed[0]).toBeGreaterThanOrEqual(0);
+    expect(elapsed[1]).toBeGreaterThanOrEqual(elapsed[0]);
   });
 
   it('旧版降级：无 ready 字段 → ok 且 legacy true', async () => {

@@ -62,7 +62,7 @@ cocoscli list                # 列出所有已注册工程
 
 `init` 会依次执行：定位 CocosCreator → 判定 Cocos 3.x 工程 → 安装 CocosMCP（优先 `vendor/CocosMCP` copy → `deps/CocosMCP` → fallback GitHub clone）→ build 扩展 → 写 `settings/mcp-server.json` → 用 CocosCreator 打开并等待就绪（追加 `--nologin`，`/health ready:true`，同 open 语义）→ 登记到全局工程注册表。
 
-`open` 的就绪判定链：扩展加载 → MCP server 启动 → 工具注册 → 场景就绪（`scene:ready`），四项全真时 CocosMCP `/health` 返回 `ready:true`。旧版 CocosMCP（`/health` 无 `ready` 字段，1.5.5 之前）降级为「HTTP 可达即就绪」并黄字提示；升级方式：`cocoscli remove <dir>` 后重跑 `cocoscli init <dir>`（保留原端口：`cocoscli list` 查原端口后 `-p` 指定）。极少数工程（全新、从未保存过场景）不会自动恢复场景，`scene:ready` 不来会超时——在编辑器手动打开任一场景后重跑 `cocoscli open` 即可续等成功。
+`open` 的就绪判定链：扩展加载 → MCP server 启动 → 工具注册 → 场景就绪（`scene:ready`），四项全真时 CocosMCP `/health` 返回 `ready:true`。等待过程打印各阶段进度（带 `[+Ns]` 时间戳），成功与超时均输出阶段耗时汇总（`阶段耗时：连接 server Xs → 工具注册 Xs → 场景加载 Xs，总耗时 Xs`，超时分支卡住的阶段标注「卡住」）。旧版 CocosMCP（`/health` 无 `ready` 字段，1.5.5 之前）降级为「HTTP 可达即就绪」并黄字提示；升级方式：`cocoscli remove <dir>` 后重跑 `cocoscli init <dir>`（保留原端口：`cocoscli list` 查原端口后 `-p` 指定）。极少数工程（全新、从未保存过场景）不会自动恢复场景，`scene:ready` 不来会超时——在编辑器手动打开任一场景后重跑 `cocoscli open` 即可续等成功。
 
 `close` 通过匹配 CocosCreator 进程命令行的 `--project` 参数定位目标工程，精确比对路径，不会误关同名前缀工程。
 

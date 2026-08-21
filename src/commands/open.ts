@@ -16,6 +16,22 @@ import {
 /** 等待工程就绪的总超时（毫秒）：大工程首次打开含资源导入，300 秒兜底 */
 export const MCP_READY_TIMEOUT_MS = 300_000;
 
+/** 阶段耗时结算的最小单元：阶段 + 切入时刻（距开始轮询的毫秒数） */
+interface PhaseMark {
+  phase: McpReadyPhase;
+  atMs: number;
+}
+
+/** 阶段短名（耗时汇总行用；describeMcpPhase 的描述带根因提示，太长） */
+const PHASE_SHORT_LABEL: Record<McpReadyPhase, string> = {
+  connecting: '连接 server',
+  extensionLoading: '扩展加载',
+  serverStarting: 'server 启动',
+  toolsRegistering: '工具注册',
+  sceneLoading: '场景加载',
+  ready: '就绪',
+};
+
 /**
  * 拉起（或复用已在跑的）CocosCreator 并等待工程真正就绪
  *
@@ -44,9 +60,14 @@ export async function openAndWaitReady(
   }
 
   console.log(chalk.gray(`等待工程就绪（轮询 http://127.0.0.1:${port}/health，最多 ${Math.round(MCP_READY_TIMEOUT_MS / 1000)} 秒）...`));
+  // 阶段耗时记录：每次阶段切换记一笔切入时刻，结束后结算相邻两笔的差值
+  const phaseMarks: PhaseMark[] = [];
   const result = await waitForMcpReady(port, {
     timeoutMs: MCP_READY_TIMEOUT_MS,
-    onProgress: (phase) => printPhaseProgress(phase, port),
+    onProgress: (phase, elapsedMs) => {
+      phaseMarks.push({ phase, atMs: elapsedMs });
+      printPhaseProgress(phase, port, elapsedMs);
+    },
   });
 
   if (result.ok) {
@@ -54,6 +75,7 @@ export async function openAndWaitReady(
     const toolsInfo = result.health?.tools !== undefined ? `，工具 ${result.health.tools} 个` : '';
     const versionInfo = result.health?.version ? `，CocosMCP ${result.health.version}` : '';
     console.log(chalk.green(`[完成] 工程已就绪：${dir}（MCP 端口 ${port}${toolsInfo}${versionInfo}，耗时 ${seconds} 秒）`));
+    printPhaseBreakdown(phaseMarks, result.elapsedMs, false);
     if (result.legacy) {
       console.log(chalk.yellow('[提示] 检测到旧版 CocosMCP（/health 无 ready 字段），已降级为「HTTP 可达即就绪」，无法确认场景是否加载完成。'));
       console.log(chalk.yellow('  建议：cocoscli remove 后重跑 cocoscli init 升级 CocosMCP（保留端口用 cocoscli list 查原端口后 -p 指定）。'));
@@ -63,30 +85,62 @@ export async function openAndWaitReady(
 
   // 超时失败：打印卡住的阶段 + 根因提示
   console.log(chalk.red(`[失败] 等待工程就绪超时（${Math.round(MCP_READY_TIMEOUT_MS / 1000)} 秒），卡在阶段：${describeMcpPhase(result.phase)}`));
+  printPhaseBreakdown(phaseMarks, result.elapsedMs, true);
   printTimeoutHints(dir, result.phase);
   warnProxyIfLoopbackBlocked();
   process.exit(1);
 }
 
-/** 阶段变化时的进度输出（waitForMcpReady 只在阶段切换时回调，不刷屏） */
-function printPhaseProgress(phase: McpReadyPhase, port: number): void {
+/** 阶段变化时的进度输出（waitForMcpReady 只在阶段切换时回调，不刷屏）；
+ *  elapsedMs = 切入该阶段的时刻（距开始轮询），作为阶段时间戳随行打印 */
+function printPhaseProgress(phase: McpReadyPhase, port: number, elapsedMs: number): void {
+  const stamp = `+${(elapsedMs / 1000).toFixed(1)}s`;
   switch (phase) {
     case 'connecting':
       // 首个 tick 必然先到这里，上面已打印「等待工程就绪」标题行，此处不重复
       break;
     case 'extensionLoading':
     case 'serverStarting':
-      console.log(chalk.gray(`  CocosMCP 扩展已加载，等待 server 启动（端口 ${port}）...`));
+      console.log(chalk.gray(`  [${stamp}] CocosMCP 扩展已加载，等待 server 启动（端口 ${port}）...`));
       break;
     case 'toolsRegistering':
-      console.log(chalk.gray('  MCP server 已启动，等待工具注册...'));
+      console.log(chalk.gray(`  [${stamp}] MCP server 已启动，等待工具注册...`));
       break;
     case 'sceneLoading':
-      console.log(chalk.gray('  工具已注册，等待场景就绪（scene:ready）...'));
+      console.log(chalk.gray(`  [${stamp}] 工具已注册，等待场景就绪（scene:ready）...`));
       break;
     case 'ready':
       break;
   }
+}
+
+/**
+ * 打印各阶段耗时明细 + 总耗时
+ *
+ * 相邻两条记录的切入时刻之差 = 前一阶段耗时；最后一条到 totalMs 的差值 = 尾阶段耗时
+ * （超时时尾阶段即卡住的阶段，其耗时 = 「已等了多久还没过这一步」）。
+ * 连续同名阶段跳过（onProgress 已保证不重复，此处兜底防手工拼接的记录）。
+ *
+ * @param marks 阶段切换记录（含切入时刻）
+ * @param totalMs 总耗时（成功 = result.elapsedMs；超时 = 已等到超时上限）
+ * @param timedOut 超时分支：尾阶段标为「卡住」而非「完成」
+ */
+function printPhaseBreakdown(marks: PhaseMark[], totalMs: number, timedOut: boolean): void {
+  if (marks.length === 0) return;
+  const totalSec = (totalMs / 1000).toFixed(1);
+  const parts: string[] = [];
+  for (let i = 0; i < marks.length; i++) {
+    const cur = marks[i];
+    const prev = marks[i - 1];
+    if (prev && prev.phase === cur.phase) continue;
+    const endMs = i + 1 < marks.length ? marks[i + 1].atMs : totalMs;
+    const costSec = ((endMs - cur.atMs) / 1000).toFixed(1);
+    const label = PHASE_SHORT_LABEL[cur.phase];
+    const isTail = i === marks.length - 1 || marks.slice(i + 1).every((m) => m.phase === cur.phase);
+    const tailMark = isTail && timedOut ? '（卡住）' : '';
+    parts.push(`${label} ${costSec}s${tailMark}`);
+  }
+  console.log(chalk.gray(`  阶段耗时：${parts.join(' → ')}，总耗时 ${totalSec}s`));
 }
 
 /** 超时根因提示：按卡住的阶段给针对性建议 */
